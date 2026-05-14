@@ -307,10 +307,215 @@ tbody tr.row-p{background:#FFF0A0!important}
   .stats-row{grid-template-columns:repeat(3,1fr)}
   .cv,.cq{display:none}.cn{max-width:110px}
 }
+#loginOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+
+    font-family: Tahoma, Arial, sans-serif;
+}
+
+#loginWindow {
+    width: 352px;
+    background: #e8c77c;
+    border: 2px solid #8f8f8f;
+
+    box-shadow:
+        0 0 0 1px #ffffff inset,
+        2px 2px 8px rgba(0,0,0,0.35);
+}
+
+#loginTopBar {
+    background: linear-gradient(to bottom, #36b3e8, #1e97cb);
+
+    color: #222;
+
+    font-size: 12px;
+    padding: 6px 8px;
+
+    border-bottom: 1px solid #8b8b8b;
+
+    font-weight: normal;
+}
+
+#loginContent {
+    display: flex;
+    padding: 12px;
+}
+
+#logoArea {
+    width: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#diamond {
+    width: 40px;
+    height: 40px;
+
+    border: 4px solid red;
+
+    transform: rotate(45deg);
+
+    margin-bottom: 14px;
+
+    position: relative;
+}
+
+#diamond::after {
+    content: "";
+
+    width: 20px;
+    height: 20px;
+
+    border: 3px solid black;
+
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%, -50%);
+}
+
+#visualText {
+    font-size: 24px;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: 1px;
+    color: black;
+    line-height: 20px;
+}
+
+#visualText::after {
+    content: "AL";
+    color: red;
+}
+
+#sistemasText {
+    font-size: 13px;
+    color: #333;
+    margin-top: -2px;
+}
+
+#formArea {
+    flex: 1;
+    padding-left: 8px;
+}
+
+.inputRow {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.inputRow label {
+    width: 60px;
+    font-size: 15px;
+    font-weight: bold;
+    color: #111;
+}
+
+.inputRow input {
+    width: 130px;
+    height: 24px;
+
+    border: 1px solid #666;
+
+    background: #f8e5a8;
+
+    padding-left: 6px;
+
+    font-size: 14px;
+
+    outline: none;
+}
+
+#entrarBtn {
+    margin-top: 4px;
+    margin-left: 60px;
+
+    width: 90px;
+    height: 28px;
+
+    border: 1px solid #666;
+
+    background: linear-gradient(to bottom, #ffffff, #d7d7d7);
+
+    cursor: pointer;
+
+    font-weight: bold;
+}
+
+#entrarBtn:hover {
+    background: linear-gradient(to bottom, #ffffff, #c4c4c4);
+}
+
+#erroLogin {
+    color: darkred;
+    font-size: 12px;
+    margin-top: 8px;
+    margin-left: 60px;
+    height: 14px;
+}
 </style>
 </head>
 <body>
+  
+<div id="loginOverlay">
 
+    <div id="loginWindow">
+
+        <div id="loginTopBar">
+            James LH TOME & CIA LTDA
+        </div>
+
+        <div id="loginContent">
+
+            <div id="logoArea">
+                <div id="diamond"></div>
+
+                <div id="visualText">
+                    VISUAL
+                </div>
+
+                <div id="sistemasText">
+                    Sistemas
+                </div>
+            </div>
+
+            <div id="formArea">
+
+                <div class="inputRow">
+                    <label>Usuário</label>
+                    <input type="text" value="OPERADOR" readonly>
+                </div>
+
+                <div class="inputRow">
+                    <label>Senha</label>
+                    <input type="password" id="senhaInput" autofocus>
+                </div>
+
+                <button id="entrarBtn">
+                    Entrar
+                </button>
+
+                <div id="erroLogin"></div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+  
 <div id="win">
 
   <!-- ════ TITLEBAR DA JANELA ════ -->
@@ -1163,6 +1368,56 @@ document.querySelectorAll('.m-ov').forEach(function(o) {
 });
 
 updStats();
+</script>
+<script>
+
+const SENHA_CORRETA = "546790";
+
+let tentativas = 0;
+
+const senhaInput = document.getElementById("senhaInput");
+const entrarBtn = document.getElementById("entrarBtn");
+const erroLogin = document.getElementById("erroLogin");
+const loginOverlay = document.getElementById("loginOverlay");
+
+function verificarSenha() {
+
+    const senha = senhaInput.value;
+
+    if (senha === SENHA_CORRETA) {
+
+        loginOverlay.style.display = "none";
+
+        return;
+    }
+
+    tentativas++;
+
+    senhaInput.value = "";
+
+    if (tentativas >= 3) {
+
+        erroLogin.innerText = "Sistema bloqueado.";
+
+        senhaInput.disabled = true;
+        entrarBtn.disabled = true;
+
+        return;
+    }
+
+    erroLogin.innerText = `Senha incorreta (${tentativas}/3)`;
+}
+
+entrarBtn.addEventListener("click", verificarSenha);
+
+senhaInput.addEventListener("keydown", function(e) {
+
+    if (e.key === "Enter") {
+        verificarSenha();
+    }
+
+});
+
 </script>
 </body>
 </html>
