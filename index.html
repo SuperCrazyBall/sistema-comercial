@@ -36,7 +36,7 @@ html,body{height:100vh;width:100vw;overflow:hidden;font-family:Arial,sans-serif;
 }
 .win-title-left{display:flex;align-items:center;gap:5px}
 .win-title-ico{width:14px;height:14px;object-fit:contain}
-.win-title-txt{font-size:11px;font-weight:bold;font-style:italic;color:#FFF}
+.win-title-txt{font-size:11px;font-weight:bold;font-:italic;color:#FFF}
 .win-title-right{display:flex;align-items:center;gap:10px}
 .dosplasticos{text-align:right;line-height:1.2}
 .dosplasticos .name{font-size:13px;font-weight:bold;color:#FFF;letter-spacing:.5px}
@@ -83,7 +83,7 @@ html,body{height:100vh;width:100vw;overflow:hidden;font-family:Arial,sans-serif;
   border:2px dashed #C07800;background:#FFFAE8;
   padding:28px 20px;text-align:center;cursor:pointer;
 }
-#upload-zone:hover,#upload-zone.dragover{background:#FFF4C0;border-style:solid}
+#upload-zone:hover,#upload-zone.dragover{background:#FFF4C0;border-:solid}
 #file-input{display:none}
 .upl-icon{font-size:32px;margin-bottom:8px}
 .upl-title{font-size:14px;font-weight:bold;margin-bottom:4px}
@@ -104,7 +104,7 @@ html,body{height:100vh;width:100vw;overflow:hidden;font-family:Arial,sans-serif;
 .spin{width:34px;height:34px;border:3px solid #DDD;border-top-color:#F5A700;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .proc-t{font-size:12px;font-weight:bold;margin-bottom:3px}
-#proc-s{font-size:10px;color:#666;font-style:italic}
+#proc-s{font-size:10px;color:#666;font-:italic}
 .prog-w{width:220px;height:9px;background:#DDD;border:1px inset #999;margin:7px auto 0}
 .prog-b{height:100%;background:#F5A700;width:0;transition:width .35s}
 
@@ -119,11 +119,11 @@ html,body{height:100vh;width:100vw;overflow:hidden;font-family:Arial,sans-serif;
 }
 .orc-tb{
   background:linear-gradient(180deg,#1565C0 0%,#003399 100%);
-  color:#FFF;font-size:11px;font-weight:bold;font-style:italic;
+  color:#FFF;font-size:11px;font-weight:bold;font-:italic;
   padding:2px 7px;display:flex;align-items:center;justify-content:space-between;
   min-height:20px;
 }
-.orc-num{font-size:16px;font-weight:bold;font-style:italic}
+.orc-num{font-size:16px;font-weight:bold;font-:italic}
 .orc-body{padding:4px}
 .orc-grid{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
@@ -188,7 +188,7 @@ table{width:100%;border-collapse:collapse}
 thead{background:#CC6600}
 th{
   padding:3px 5px;text-align:left;
-  font-size:9px;font-weight:bold;font-style:italic;
+  font-size:9px;font-weight:bold;font-:italic;
   color:#FFF;border-right:1px solid rgba(255,255,255,0.2);
   white-space:nowrap;cursor:pointer;user-select:none;text-transform:uppercase;
 }
@@ -275,7 +275,7 @@ tbody tr.row-p{background:#FFF0A0!important}
 }
 .m-tb{
   background:linear-gradient(180deg,#1565C0 0%,#003399 100%);
-  color:#FFF;font-size:11px;font-weight:bold;font-style:italic;
+  color:#FFF;font-size:11px;font-weight:bold;font-:italic;
   padding:2px 7px;display:flex;align-items:center;justify-content:space-between;
 }
 .m-close{cursor:pointer;background:none;border:none;color:#FFF;font-size:13px;font-weight:bold;padding:0 2px}
@@ -310,163 +310,268 @@ tbody tr.row-p{background:#FFF0A0!important}
 #loginOverlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.15);
+
+    background: #efefef;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 999999;
 
-    font-family: Tahoma, Arial, sans-serif;
+    z-index: 999999999;
+
+    font-family: Tahoma, "MS Sans Serif", sans-serif;
 }
 
 #loginWindow {
+
     width: 352px;
-    background: #e8c77c;
-    border: 2px solid #8f8f8f;
+    height: 122px;
+
+    background: #e6c676;
+
+    border:
+        1px solid #f7f7f7;
 
     box-shadow:
-        0 0 0 1px #ffffff inset,
-        2px 2px 8px rgba(0,0,0,0.35);
+        1px 1px 0 #808080,
+        2px 2px 0 #404040;
+
+    overflow: hidden;
 }
 
 #loginTopBar {
-    background: linear-gradient(to bottom, #36b3e8, #1e97cb);
 
-    color: #222;
+    height: 21px;
 
-    font-size: 12px;
-    padding: 6px 8px;
+    background: linear-gradient(
+        to bottom,
+        #31b3eb 0%,
+        #1692c6 100%
+    );
 
-    border-bottom: 1px solid #8b8b8b;
+    border-bottom: 1px solid #7c7c7c;
 
-    font-weight: normal;
+    display: flex;
+    align-items: center;
+
+    padding-left: 8px;
+
+    font-size: 11px;
+    color: #2b2b2b;
+
+    letter-spacing: 0.2px;
 }
 
 #loginContent {
     display: flex;
-    padding: 12px;
+    height: calc(100% - 21px);
 }
 
 #logoArea {
-    width: 120px;
+
+    width: 132px;
+
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+
+    padding-top: 2px;
 }
 
 #diamond {
-    width: 40px;
-    height: 40px;
 
-    border: 4px solid red;
+    width: 30px;
+    height: 30px;
+
+    border: 3px solid #e20000;
 
     transform: rotate(45deg);
 
-    margin-bottom: 14px;
-
     position: relative;
+
+    margin-bottom: 8px;
 }
 
 #diamond::after {
+
     content: "";
 
-    width: 20px;
-    height: 20px;
-
-    border: 3px solid black;
-
     position: absolute;
+
+    width: 15px;
+    height: 15px;
+
+    border: 2px solid #111;
 
     top: 50%;
     left: 50%;
 
-    transform: translate(-50%, -50%);
+    transform:
+        translate(-50%, -50%);
 }
 
-#visualText {
-    font-size: 24px;
+#visualWrapper {
+    display: flex;
+    align-items: flex-end;
+}
+
+#visualBlack {
+
+    font-size: 22px;
     font-weight: 900;
+
     font-style: italic;
-    letter-spacing: 1px;
-    color: black;
-    line-height: 20px;
+
+    color: #000;
+
+    line-height: 18px;
+
+    letter-spacing: -1px;
 }
 
-#visualText::after {
-    content: "AL";
-    color: red;
+#visualRed {
+
+    font-size: 22px;
+    font-weight: 900;
+
+    font-style: italic;
+
+    color: #d50000;
+
+    line-height: 18px;
+
+    letter-spacing: -1px;
 }
 
 #sistemasText {
-    font-size: 13px;
-    color: #333;
+
+    font-size: 11px;
+
+    color: #222;
+
     margin-top: -2px;
+
+    letter-spacing: 0.3px;
 }
 
 #formArea {
+
     flex: 1;
-    padding-left: 8px;
+
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+
+    padding-right: 12px;
 }
 
 .inputRow {
+
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
+
+    margin-bottom: 8px;
 }
 
 .inputRow label {
-    width: 60px;
-    font-size: 15px;
+
+    width: 54px;
+
+    font-size: 12px;
+
     font-weight: bold;
+
     color: #111;
 }
 
 .inputRow input {
-    width: 130px;
-    height: 24px;
 
-    border: 1px solid #666;
+    width: 126px;
+    height: 19px;
 
-    background: #f8e5a8;
+    border:
+        1px solid #7c7c7c;
 
-    padding-left: 6px;
+    background: #f7e5a7;
 
-    font-size: 14px;
+    font-size: 12px;
+
+    padding-left: 4px;
+
+    font-family:
+        Tahoma,
+        "MS Sans Serif",
+        sans-serif;
 
     outline: none;
+
+    box-shadow:
+        inset 1px 1px 0 #ffffff;
+}
+
+/* REMOVE OLHO DA SENHA */
+input::-ms-reveal,
+input::-ms-clear {
+    display: none;
+}
+
+input[type="password"] {
+    -webkit-text-security: disc;
 }
 
 #entrarBtn {
-    margin-top: 4px;
-    margin-left: 60px;
 
-    width: 90px;
-    height: 28px;
+    width: 74px;
+    height: 23px;
 
-    border: 1px solid #666;
+    margin-left: 54px;
 
-    background: linear-gradient(to bottom, #ffffff, #d7d7d7);
+    border:
+        1px solid #7a7a7a;
+
+    background:
+        linear-gradient(
+            to bottom,
+            #ffffff,
+            #d8d8d8
+        );
+
+    font-size: 11px;
+
+    font-family:
+        Tahoma,
+        sans-serif;
 
     cursor: pointer;
-
-    font-weight: bold;
 }
 
-#entrarBtn:hover {
-    background: linear-gradient(to bottom, #ffffff, #c4c4c4);
+#entrarBtn:active {
+
+    background:
+        linear-gradient(
+            to bottom,
+            #cfcfcf,
+            #efefef
+        );
 }
 
 #erroLogin {
-    color: darkred;
-    font-size: 12px;
-    margin-top: 8px;
-    margin-left: 60px;
-    height: 14px;
+
+    height: 12px;
+
+    margin-top: 5px;
+
+    margin-left: 54px;
+
+    font-size: 11px;
+
+    color: #a10000;
 }
 </style>
 </head>
-<body>
+<body style="visibility:hidden;">
   
 <div id="loginOverlay">
 
@@ -478,17 +583,27 @@ tbody tr.row-p{background:#FFF0A0!important}
 
         <div id="loginContent">
 
-            <div id="logoArea">
-                <div id="diamond"></div>
+<div id="logoArea">
 
-                <div id="visualText">
-                    VISUAL
-                </div>
+    <div id="diamond"></div>
 
-                <div id="sistemasText">
-                    Sistemas
-                </div>
-            </div>
+    <div id="visualWrapper">
+
+        <div id="visualBlack">
+            VISU
+        </div>
+
+        <div id="visualRed">
+            AL
+        </div>
+
+    </div>
+
+    <div id="sistemasText">
+        Sistemas
+    </div>
+
+</div>
 
             <div id="formArea">
 
@@ -1386,7 +1501,9 @@ function verificarSenha() {
 
     if (senha === SENHA_CORRETA) {
 
-        loginOverlay.style.display = "none";
+        document.body.style.visibility = "visible";
+
+loginOverlay.style.display = "none";
 
         return;
     }
