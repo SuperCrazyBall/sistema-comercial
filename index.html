@@ -365,14 +365,957 @@ tbody tr.row-p { background: #FFF0A0 !important; }
 ::-webkit-scrollbar-track { background: #D0C8B0; border: 1px inset #888; }
 ::-webkit-scrollbar-thumb { background: #C0B898; border: 1px solid; border-color: #FFF #888 #888 #FFF; }
 ::-webkit-scrollbar-button { background: #D0C8A8; height: 14px; border: 1px solid; border-color: #FFF #888 #888 #FFF; display: block; }
+
+/* ══════════════════════════════════════════════════════════════
+   SPLASH — exact pixel colors from visual_open_css.txt
+   Background texture: avg rgb(83,89,107), variance R:25-124 G:37-126 B:57-142
+   Border top: rgb(142,144,146)  Border bottom: rgb(204,203,205)
+   ══════════════════════════════════════════════════════════════ */
+#splash-screen {
+  position: fixed; inset: 0; z-index: 10000;
+  /* Exact avg texture color from pixels */
+  background: rgb(83,89,107);
+  display: flex; align-items: center; justify-content: center;
+}
+/* The box itself is the same texture */
+.spl-box {
+  width: 520px; max-width: 97vw;
+  /* Texture via a very subtle noise pattern */
+  background-color: rgb(83,89,107);
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAAUVBMVEUAAABCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlNCRlP///8AAABub3prAAAAGnRSTlMAERITFBUWFxgZGhscHR4fICEiIyQlJicoVRPsvAAAAFdJREFUeAHtwTEBAAAAwqD1T+1hBxQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AEPQAABFRqZfQAAAABJRU5ErkJggg==");
+  /* Thin border matching the pixel border colors */
+  border-top: 1px solid rgb(142,144,146);
+  border-left: 1px solid rgb(142,144,146);
+  border-right: 1px solid rgb(130,135,142);
+  border-bottom: 2px solid rgb(204,203,205);
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.6);
+  display: flex; flex-direction: column; overflow: hidden;
+  position: relative;
+}
+/* Top label bar - same texture, just text overlay */
+.spl-topbar {
+  background: rgba(0,0,0,0.0);
+  padding: 4px 10px 4px;
+  font-size: 11px; font-weight: bold;
+  color: #e0e4f0;
+  letter-spacing: 0.2px;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+}
+.spl-main {
+  padding: 16px 30px 18px;
+  display: flex; flex-direction: column;
+}
+.spl-logo-row {
+  display: flex; align-items: center;
+  gap: 18px; margin-bottom: 14px;
+}
+/* Exact diamond from photo:
+   - outer square rotated 45deg, black background, orange/red border
+   - middle filled orange/red
+   - tiny white diamond in center */
+.spl-diam-outer {
+  width: 72px; height: 72px; flex-shrink: 0;
+  transform: rotate(45deg);
+  background: #0a0a0a;
+  border: 3px solid #cc3300;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 8px rgba(170,40,0,0.4);
+}
+.spl-diam-mid {
+  width: 42px; height: 42px;
+  background: #cc3300;
+  display: flex; align-items: center; justify-content: center;
+}
+.spl-diam-ctr {
+  width: 14px; height: 14px;
+  background: #ffffff;
+}
+.spl-title-col { display: flex; flex-direction: column; gap: 3px; }
+/* SYSINT — large, bold, red-orange, with slight shadow on textured bg */
+.spl-sysint {
+  font-size: 56px; font-weight: 900; line-height: 1;
+  color: #cc3300;
+  font-family: "Arial Black", "Arial Bold", Arial, sans-serif;
+  letter-spacing: 2px;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
+}
+/* SISTEMAS INTEGRADOS */
+.spl-sub {
+  font-size: 11px; font-weight: 400;
+  letter-spacing: 5px;
+  color: #b0bcd0;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+}
+/* VISUAL Sistemas bottom-right */
+.spl-vis-row { text-align: right; margin-bottom: 14px; }
+.spl-vis-word {
+  font-size: 28px; font-weight: 900; font-style: italic;
+  font-family: "Arial Black", "Arial Bold", Arial, sans-serif;
+  color: #c8d8f0;
+  letter-spacing: 1px; line-height: 1;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
+}
+.spl-vis-word .spl-va { color: #ff6600; }
+.spl-vis-sis {
+  font-size: 11px; font-style: italic;
+  color: #9aaac0;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+}
+/* Progress bar */
+.spl-bar {
+  width: 100%; height: 5px;
+  background: rgba(0,0,0,0.5);
+  overflow: hidden; margin-bottom: 6px;
+}
+.spl-prog {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #cc3300, #ff6600);
+}
+.spl-lic {
+  font-size: 10px; color: #8090aa;
+  text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOGIN OVERLAY — fundo cinza neutro
+   ══════════════════════════════════════════════════════════════ */
+#login-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #7a8090;
+  display: none; align-items: center; justify-content: center;
+}
+/* LOGIN BOX — caixa compacta estilo imagem referência */
+#login-box {
+  width: 360px; max-width: 98vw;
+  background: #d4c87a;
+  border-top: 2px solid #e8dfa0;
+  border-left: 2px solid #e8dfa0;
+  border-right: 2px solid #8a7a30;
+  border-bottom: 2px solid #8a7a30;
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.55);
+  overflow: hidden;
+}
+/* Header - azul fino */
+#login-hd {
+  background: rgb(41,154,201);
+  color: #ffffff;
+  font-size: 11px; font-weight: bold;
+  padding: 4px 8px;
+  letter-spacing: 0.2px;
+}
+#login-body { padding: 6px 8px 8px; background: #d4c87a; }
+.lgi-top-row {
+  display: flex; align-items: center;
+  gap: 10px; margin-bottom: 0;
+}
+/* Logo box — pequena com borda preta */
+.lgi-logo-sq {
+  width: 72px; flex-shrink: 0;
+  background: #d4c87a;
+  border: 2px solid #111;
+  padding: 5px 4px 3px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 2px;
+}
+/* Diamond pequeno */
+.lgi-diam-outer {
+  width: 38px; height: 38px;
+  background: #0a0a0a;
+  border: 2px solid #cc2200;
+  transform: rotate(45deg);
+  display: flex; align-items: center; justify-content: center;
+}
+.lgi-diam-mid {
+  width: 22px; height: 22px;
+  background: #cc2200;
+  display: flex; align-items: center; justify-content: center;
+}
+.lgi-diam-ctr { width: 8px; height: 8px; background: #fff; }
+/* VISUAL texto no login */
+.lgi-vis-word {
+  font-size: 14px; font-weight: 900; font-style: italic;
+  font-family: "Arial Black", "Arial Bold", Arial, sans-serif;
+  color: #1a3aaa; line-height: 1; margin-top: 3px;
+}
+.lgi-vis-word .lgi-va { color: #ff6600; }
+.lgi-vis-sis { font-size: 8px; font-style: italic; color: #333; }
+/* Fields — Usuário e Senha */
+.lgi-fields { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.lgi-row { display: flex; align-items: center; gap: 5px; }
+.lgi-lbl {
+  width: 52px; font-size: 11px; font-weight: bold;
+  text-align: right; color: #111; flex-shrink: 0;
+}
+/* Input fields */
+.lgi-inp {
+  flex: 1; height: 20px; font-size: 11px;
+  border: 1px inset #888; background: #ffffee;
+  color: #000; padding: 1px 4px; outline: none;
+  font-family: Arial, sans-serif;
+}
+.lgi-inp:focus { border-color: #444; background: #ffffff; }
+.lgi-sep { border: none; border-top: 1px solid #a09030; margin: 7px 0 6px; }
+.lgi-btns { display: flex; gap: 8px; justify-content: center; }
+.lgi-btn-enter {
+  background: #e08010; color: #fff;
+  font-size: 12px; font-weight: bold;
+  border-top: 2px solid #f0c060; border-left: 2px solid #f0c060;
+  border-right: 2px solid #804000; border-bottom: 2px solid #804000;
+  padding: 4px 18px; cursor: pointer; font-family: Arial, sans-serif;
+}
+.lgi-btn-enter:hover { background: #f09020; }
+.lgi-btn-exit {
+  background: #c8b860; color: #222;
+  font-size: 12px; font-weight: bold;
+  border-top: 2px solid #e8d880; border-left: 2px solid #e8d880;
+  border-right: 2px solid #706020; border-bottom: 2px solid #706020;
+  padding: 4px 18px; cursor: pointer; font-family: Arial, sans-serif;
+}
+.lgi-btn-exit:hover { background: #d8c870; }
+.lgi-err {
+  min-height: 11px; font-size: 9.5px;
+  color: #cc0000; font-weight: bold;
+  text-align: center; margin-top: 3px;
+}
+/* ── Sync / statusbar ── */
+#seg-user { background:#1A4A9A!important; color:#FFF!important; font-weight:bold!important; padding:0 8px!important; }
+.sync-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; background:#999; vertical-align:middle; }
+.sync-dot.ok { background:#44cc44; }
+.sync-dot.busy { background:#ffaa00; animation:sdPulse .7s ease infinite; }
+.sync-dot.err { background:#cc2200; }
+@keyframes sdPulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+/* ── Permission modal ── */
+#perm-modal { display:none; position:fixed; inset:0; z-index:8888; background:rgba(0,0,0,.45); align-items:center; justify-content:center; }
+#perm-modal.on { display:flex; }
+#perm-win { background:#F5EDD8; width:290px; border:2px solid; border-color:#FFF #777 #777 #FFF; box-shadow:4px 4px 14px rgba(0,0,0,.5); }
+#perm-hd { background:linear-gradient(180deg,#BB6600,#884400); color:#FFF; font-size:11px; font-weight:bold; padding:4px 10px; display:flex; align-items:center; justify-content:space-between; }
+#perm-body { padding:16px 18px; display:flex; gap:12px; align-items:center; }
+.perm-ico { font-size:30px; flex-shrink:0; }
+.perm-msg { font-size:12px; font-weight:bold; color:#553300; line-height:1.6; }
+#perm-foot { padding:10px; display:flex; justify-content:center; border-top:1px solid #C8B888; }
+.no-perm { opacity:.35 !important; cursor:not-allowed !important; }
+meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Importação de Pedidos de Venda — Comercial do Norte</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+/* ================================================
+   RESET + BASE
+   ================================================ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  height: 100vh; width: 100vw; overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #000;
+  background: #707070;
+}
+
+/* ================================================
+   JANELA PRINCIPAL (ocupa tela toda)
+   ================================================ */
+#win {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column;
+  background: #F5EDD8;
+  border: 2px solid; border-color: #E0E0E0 #555 #555 #E0E0E0;
+  box-shadow: 3px 3px 12px rgba(0,0,0,.65);
+  overflow: hidden;
+}
+
+/* ─── TITLEBAR AZUL ─── */
+#titlebar {
+  flex-shrink: 0;
+  height: 24px;
+  background: linear-gradient(180deg, #1565C0 0%, #003399 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  user-select: none;
+}
+.tb-left {
+  display: flex; align-items: center; gap: 5px;
+}
+.tb-logo-ico { width: 15px; height: 15px; object-fit: contain; }
+.tb-title-txt { font-size: 11px; font-weight: bold; font-style: italic; color: #FFF; }
+.tb-right { display: flex; align-items: center; gap: 6px; }
+.tb-company { text-align: right; line-height: 1.25; }
+.tb-company .co { font-size: 13px; font-weight: bold; color: #FFF; letter-spacing: .3px; }
+.tb-company .op { font-size: 9px; color: rgba(255,255,255,.8); }
+
+/* ─── TOOLBAR AMARELA ─── */
+#toolbar {
+  flex-shrink: 0;
+  height: 50px;
+  background: #F5A700;
+  border-bottom: 2px solid #C07800;
+  display: flex;
+  align-items: center;
+  padding: 2px 5px;
+  gap: 1px;
+  overflow: hidden;
+}
+.tb-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 46px; height: 46px; padding: 1px 3px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: Arial, sans-serif;
+  color: #000;
+}
+.tb-btn:hover { background: rgba(0,0,0,.12); border-color: rgba(0,0,0,.2); }
+.tb-btn:active { background: rgba(0,0,0,.2); }
+.tb-btn .ic { font-size: 19px; line-height: 1; display: block; margin-bottom: 1px; }
+.tb-btn .lb { font-size: 7.5px; font-weight: bold; text-decoration: underline; white-space: nowrap; }
+.tb-sep { flex-shrink: 0; width: 1px; height: 38px; background: rgba(0,0,0,.25); margin: 0 3px; }
+.tb-logo-wrap {
+  margin-left: auto; flex-shrink: 0;
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.4);
+  border: 1px solid rgba(0,0,0,.12);
+  padding: 3px 8px; border-radius: 2px;
+}
+.tb-logo-wrap img { height: 28px; width: auto; display: block; }
+.tb-logo-txt { font-size: 10px; font-weight: bold; line-height: 1.35; }
+.tb-logo-txt .r { color: #CC1111; }
+.tb-logo-txt .b { color: #1A3A8A; }
+
+/* ─── BARRA DE ABAS ─── */
+#tabsbar {
+  flex-shrink: 0;
+  height: 24px;
+  background: #E8C840;
+  border-bottom: 2px solid #C09000;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 5px;
+  gap: 2px;
+}
+.tab-btn {
+  height: 22px; padding: 0 14px;
+  font-size: 11px; font-weight: bold;
+  border: 1px solid #B08000; border-bottom: none;
+  background: #CC9900; color: #222;
+  cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center;
+}
+.tab-btn:hover { background: #E0B000; }
+.tab-btn.active {
+  background: #FFF8E0; color: #000;
+  border-color: #B08000; border-bottom-color: #FFF8E0;
+  margin-bottom: -2px; z-index: 1;
+  border-top: 2px solid #F5A700;
+}
+
+/* ─── ÁREA DE CONTEÚDO ─── */
+#content {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  background: #F5EDD8;
+}
+.pane { display: none; padding: 7px; }
+.pane.active { display: block; }
+
+/* ─── STATUS BAR (cinza neutro, NÃO amarela) ─── */
+#statusbar {
+  flex-shrink: 0;
+  height: 20px;
+  background: #B8B0A0;
+  border-top: 2px solid; border-color: #888 #DDD #DDD #888;
+  display: flex; align-items: center; gap: 3px; padding: 0 3px;
+}
+.seg {
+  display: flex; align-items: center;
+  padding: 0 6px; height: 16px;
+  border: 1px inset #888; background: #D0C8B8;
+  font-size: 10px; font-weight: bold; color: #000; white-space: nowrap;
+}
+.seg.main { flex: 1; min-width: 0; }
+
+/* ================================================
+   COMPONENTES INTERNOS
+   ================================================ */
+
+/* Painel VS (janela interna) */
+.vs-panel { border: 2px solid; border-color: #DDD #888 #888 #DDD; margin-bottom: 6px; background: #F5EDD8; }
+.vs-panel-hd {
+  background: linear-gradient(180deg, #1565C0 0%, #003399 100%);
+  color: #FFF; font-size: 11px; font-weight: bold; font-style: italic;
+  padding: 2px 8px; min-height: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.vs-panel-bd { padding: 5px; background: #FFF8E8; }
+
+/* Botão VS */
+.vbtn {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 10px; cursor: pointer; white-space: nowrap;
+  font-family: Arial, sans-serif; font-size: 11px; font-weight: bold;
+  background: #F0E8C0; color: #000;
+  border: 2px solid; border-color: #FFF #888 #888 #FFF;
+}
+.vbtn:hover { background: #F5A700; border-color: #FFF #885500 #885500 #FFF; }
+.vbtn:active { border-color: #888 #FFF #FFF #888; }
+.vbtn.prim { background: #F5A700; }
+.vbtn.prim:hover { background: #FFC030; }
+.vbtn.success { background: #C0EEC0; color: #004400; border-color: #FFF #226600 #226600 #FFF; }
+.vbtn.danger { background: #F8CCCC; color: #880000; border-color: #FFF #660000 #660000 #FFF; }
+.vbtn.danger:hover { background: #EE4444; color: #FFF; }
+.vbtn.sm { font-size: 9.5px; padding: 1px 6px; }
+
+/* Input VS */
+.vi { font-family: Arial, sans-serif; font-size: 11px; border: 2px inset #999; background: #FFF; padding: 2px 4px; color: #000; outline: none; }
+.vi:focus { background: #FFFFF0; }
+.vs-sel { font-family: Arial, sans-serif; font-size: 11px; border: 2px inset #999; background: #FFF; padding: 2px 3px; color: #000; outline: none; }
+
+/* Stats row */
+.stats-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 3px; margin-bottom: 5px; }
+.sbox { background: #FFFAE0; border: 2px solid; border-color: #DDD #888 #888 #DDD; padding: 4px 6px; text-align: center; cursor: pointer; }
+.sbox:hover { background: #FFF4C0; }
+.sbox.on { background: #FFF0A0; border-color: #F5A700 #F5A700 #F5A700 #F5A700; }
+.sn { font-size: 20px; font-weight: bold; line-height: 1; }
+.sn.blu { color: #003399; } .sn.grn { color: #006600; } .sn.red { color: #CC0000; } .sn.gld { color: #AA6600; }
+.sl { font-size: 8px; font-weight: bold; color: #555; margin-top: 1px; text-transform: uppercase; }
+
+/* Action bar */
+.actbar {
+  background: linear-gradient(180deg, #FFE870 0%, #F5D840 100%);
+  border: 1px solid #C09000;
+  padding: 3px 5px; display: flex; align-items: center; gap: 3px;
+  margin-bottom: 4px; flex-wrap: wrap;
+}
+.srch { flex: 1; min-width: 140px; font-family: Arial, sans-serif; font-size: 11px; border: 2px inset #999; padding: 2px 5px; background: #FFF; color: #000; outline: none; }
+.srch:focus { background: #FFFFF0; }
+.asep { flex-shrink: 0; width: 1px; height: 18px; background: #C09000; margin: 0 2px; }
+
+/* Tabela */
+.tbl-wrap { border: 2px solid; border-color: #888 #DDD #DDD #888; margin-bottom: 5px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+thead { background: #CC6600; }
+th { padding: 3px 5px; text-align: left; font-size: 9px; font-weight: bold; font-style: italic; color: #FFF; border-right: 1px solid rgba(255,255,255,.2); white-space: nowrap; cursor: pointer; user-select: none; text-transform: uppercase; }
+th.ns { cursor: default; } th:last-child { border-right: none; } th:hover { background: rgba(255,255,255,.1); }
+td { padding: 3px 5px; border-bottom: 1px solid #D4C8A0; border-right: 1px solid rgba(0,0,0,.06); font-size: 11px; vertical-align: middle; }
+td:last-child { border-right: none; }
+tbody tr { background: #FFFEF5; }
+tbody tr:nth-child(even) { background: #F5EDD8; }
+tbody tr:hover { background: #FFF8B0 !important; }
+tbody tr.row-s { background: #CCFFCC !important; }
+tbody tr.row-c { background: #FF9999 !important; border-left: 3px solid #CC0000 !important; }
+tbody tr.row-p { background: #FFF0A0 !important; }
+.rn { font-size: 9px; color: #888; text-align: center; font-weight: bold; }
+.cod { font-family: 'Courier New', monospace; font-size: 10px; color: #003399; font-weight: bold; cursor: pointer; }
+.cod:hover { text-decoration: underline; }
+.nm { font-size: 11px; }
+.un { font-size: 10px; color: #555; text-align: center; font-weight: bold; }
+.num { font-family: 'Courier New', monospace; font-weight: bold; text-align: right; }
+.val { font-family: 'Courier New', monospace; font-size: 10.5px; color: #333; text-align: right; }
+.qi {
+  width: 58px; font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold;
+  border: 2px inset #888; padding: 2px 3px; text-align: right; background: #FFF; color: #000; outline: none;
+}
+.qi:focus { background: #FFFFF0; }
+.qi:disabled { background: #EEE; color: #999; }
+.sg { display: flex; gap: 2px; }
+.sb {
+  width: 22px; height: 20px; font-size: 10px; font-weight: bold;
+  border: 2px solid; border-color: #FFF #888 #888 #FFF;
+  background: #E8E0CC; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; color: #333;
+}
+.sb:hover { background: #F5A700; color: #000; border-color: #FFF #885500 #885500 #FFF; }
+.sb:active { border-color: #888 #FFF #FFF #888; }
+.sb.se { background: #44BB44; border-color: #FFF #226600 #226600 #FFF; color: #FFF; }
+.sb.sc { background: #CC0000; border-color: #FFF #660000 #660000 #FFF; color: #FFF; }
+.sb.sp { background: #FFCC00; border-color: #FFF #886600 #886600 #FFF; color: #553300; }
+.badge { display: inline-flex; align-items: center; padding: 1px 4px; border: 1px solid; font-size: 8.5px; font-weight: bold; white-space: nowrap; }
+.bp { background: #EEE; color: #666; border-color: #CCC; }
+.bs { background: #99EE88; color: #226600; border-color: #449900; }
+.bc { background: #CC0000; color: #FFF; border-color: #880000; }
+.bpa { background: #FFEE80; color: #664400; border-color: #AA8800; }
+
+/* Sumário de valores */
+#val-sum {
+  background: linear-gradient(180deg, #FFF4CC 0%, #FFEC90 100%);
+  border: 1px solid #C09000;
+  padding: 4px 8px; margin-bottom: 5px;
+  display: flex; gap: 14px; flex-wrap: wrap;
+  font-size: 11px; font-weight: bold;
+}
+
+/* Footer */
+.foot { display: flex; gap: 3px; padding: 4px 5px; background: #F0E8CC; border-top: 1px solid #C09000; flex-wrap: wrap; align-items: center; }
+#ftr-sum { margin-left: auto; font-size: 10px; font-weight: bold; color: #555; }
+
+/* Upload */
+#upload-zone {
+  border: 2px dashed #C07800; background: #FFFAE8;
+  padding: 28px 20px; text-align: center; cursor: pointer;
+}
+#upload-zone:hover, #upload-zone.dov { background: #FFF4C0; border-style: solid; }
+#file-input { display: none; }
+.upl-ico { font-size: 30px; margin-bottom: 7px; }
+.upl-tit { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+.upl-sub { font-size: 11px; color: #555; line-height: 1.6; }
+.upl-btn {
+  margin-top: 9px; display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 16px; font-size: 11px; font-weight: bold; font-family: Arial, sans-serif;
+  background: #F5A700; color: #000; cursor: pointer;
+  border: 2px solid; border-color: #FFF #885500 #885500 #FFF;
+}
+.upl-btn:hover { background: #FFC030; }
+.upl-tips { display: flex; gap: 5px; justify-content: center; margin-top: 7px; flex-wrap: wrap; }
+.tip { background: #FFF4C0; border: 1px solid #D4A800; padding: 2px 7px; font-size: 9.5px; color: #553300; }
+
+/* Processando */
+#proc-view { display: none; text-align: center; padding: 22px; background: #FFFAE8; border: 1px solid #C07800; }
+.spin { width: 34px; height: 34px; border: 3px solid #DDD; border-top-color: #F5A700; border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.proc-t { font-size: 12px; font-weight: bold; margin-bottom: 3px; }
+.prog-w { width: 220px; height: 9px; background: #DDD; border: 1px inset #999; margin: 7px auto 0; }
+.prog-b { height: 100%; background: #F5A700; width: 0; transition: width .35s; }
+
+/* Cabeçalho orçamento */
+.orc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); border: 1px solid #C09000; }
+.orc-f { padding: 3px 5px; border-right: 1px solid #C09000; border-bottom: 1px solid #C09000; background: #FFF8E0; }
+.orc-f:last-child { border-right: none; }
+.orc-l { font-size: 8px; font-weight: bold; color: #664400; text-transform: uppercase; display: block; margin-bottom: 1px; }
+.orc-v { font-size: 11px; font-weight: bold; color: #000; }
+.orc-v.gld { color: #AA6000; }
+.orc-v.big { font-size: 13px; color: #AA5500; }
+
+/* Edit area */
+.edit-a { padding: 6px; border-top: 1px solid #C09000; background: rgba(255,248,192,.6); }
+.egrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(143px, 1fr)); gap: 4px; margin-bottom: 5px; }
+.ef { display: flex; flex-direction: column; gap: 1px; }
+.el { font-size: 8px; font-weight: bold; color: #664400; text-transform: uppercase; }
+.ei { font-family: Arial, sans-serif; font-size: 11px; border: 2px inset #999; background: #FFF; padding: 2px 3px; color: #000; outline: none; width: 100%; }
+.ei:focus { background: #FFFFF0; }
+.es { font-family: Arial, sans-serif; font-size: 11px; border: 2px inset #999; background: #FFF; padding: 2px 3px; color: #000; outline: none; width: 100%; }
+
+/* Cortes */
+.p-cortes, .p-rel { display: none; margin-bottom: 5px; }
+.cr-row { display: flex; gap: 7px; align-items: center; padding: 2px 5px; border-bottom: 1px solid #D4C8A0; font-size: 11px; background: #FFFEF5; }
+.cr-row:nth-child(even) { background: #F5EDD8; }
+.cr-cod { font-family: 'Courier New', monospace; font-size: 10px; color: #003399; font-weight: bold; min-width: 95px; }
+.cr-nm { flex: 1; }
+.cr-st { font-size: 10px; font-weight: bold; white-space: nowrap; }
+
+/* Relatório rápido */
+.rel-opts { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; background: #FFF8D0; border-top: 1px solid #C09000; }
+.rel-opt { display: flex; align-items: center; gap: 4px; border: 2px solid; border-color: #FFF #888 #888 #FFF; background: #F0E8C0; padding: 2px 8px; cursor: pointer; font-size: 11px; font-weight: bold; }
+.rel-opt:hover { background: #F5A700; }
+.rel-acts { padding: 4px 5px; display: flex; gap: 4px; flex-wrap: wrap; border-top: 1px solid #C09000; background: rgba(255,255,255,.25); }
+
+/* Histórico */
+.hf-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; padding: 5px; background: linear-gradient(180deg,#FFE870,#F5D840); border: 1px solid #C09000; align-items: center; }
+.hcard { background: #FFFEF5; border: 2px solid; border-color: #DDD #888 #888 #DDD; padding: 5px 8px; margin-bottom: 3px; cursor: pointer; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hcard:hover { background: #FFF8B0; }
+.hnum { font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold; color: #003399; min-width: 90px; }
+.hfil { font-size: 11px; font-weight: bold; color: #AA6000; min-width: 100px; }
+.hinfo { font-size: 10px; color: #555; flex: 1; min-width: 100px; }
+.hstats { display: flex; gap: 3px; align-items: center; flex-shrink: 0; }
+.hm { font-size: 9px; font-weight: bold; padding: 1px 4px; border: 1px solid; }
+.hms { background: #99EE88; color: #226600; border-color: #449900; }
+.hmc { background: #CC0000; color: #FFF; border-color: #880000; }
+.hmp { background: #FFEE80; color: #664400; border-color: #AA8800; }
+.hact { display: flex; gap: 2px; flex-shrink: 0; }
+
+/* Analytics */
+.af-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; padding: 5px; background: linear-gradient(180deg,#FFE870,#F5D840); border: 1px solid #C09000; align-items: center; }
+.af-chk { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: bold; background: #FFF8E0; border: 1px solid #C09000; padding: 2px 7px; cursor: pointer; }
+.sec-title { font-size: 12px; font-weight: bold; font-style: italic; color: #003399; margin-bottom: 4px; padding: 2px 6px; background: #E0D8B8; border-left: 3px solid #003399; }
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 4px; margin-bottom: 6px; }
+.kpi-box { background: #FFF8E0; border: 2px solid; border-color: #DDD #888 #888 #DDD; padding: 5px 8px; text-align: center; }
+.kpi-n { font-size: 21px; font-weight: bold; line-height: 1; }
+.kpi-l { font-size: 8.5px; font-weight: bold; color: #555; text-transform: uppercase; margin-top: 2px; }
+.kpi-n.red { color: #CC0000; } .kpi-n.grn { color: #006600; } .kpi-n.gld { color: #AA6600; } .kpi-n.blu { color: #003399; }
+
+/* Modal */
+.mov { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; align-items: center; justify-content: center; }
+.mov.on { display: flex; }
+.mwin { background: #F5EDD8; border: 2px solid; border-color: #DDD #888 #888 #DDD; box-shadow: 4px 4px 10px rgba(0,0,0,.55); max-width: 500px; width: 92%; max-height: 88vh; overflow-y: auto; }
+.mwin.wide { max-width: 730px; }
+.mhd { background: linear-gradient(180deg, #1565C0 0%, #003399 100%); color: #FFF; font-size: 11px; font-weight: bold; font-style: italic; padding: 2px 8px; display: flex; align-items: center; justify-content: space-between; min-height: 20px; }
+.mclose { cursor: pointer; background: none; border: none; color: #FFF; font-size: 13px; font-weight: bold; padding: 0 2px; }
+.mclose:hover { color: #FFB0B0; }
+.mbody { padding: 9px; }
+.mfoot { padding: 5px 9px; border-top: 1px solid #C09000; display: flex; gap: 4px; justify-content: flex-end; background: rgba(255,255,255,.2); }
+.fg { margin-bottom: 6px; }
+.fl { font-size: 8.5px; font-weight: bold; color: #664400; text-transform: uppercase; display: block; margin-bottom: 2px; }
+.fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+
+/* Toast */
+#toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); font-family: Arial, sans-serif; font-weight: bold; font-size: 11px; border: 2px solid; padding: 4px 16px; z-index: 300; display: none; white-space: nowrap; box-shadow: 3px 3px 5px rgba(0,0,0,.4); background: #FFF8C0; border-color: #FFF #886600 #886600 #FFF; color: #443300; }
+#toast.show { display: block; }
+#toast.ok { background: #C0F0A0; border-color: #FFF #226600 #226600 #FFF; color: #003300; }
+#toast.err { background: #FFB0B0; border-color: #FFF #880000 #880000 #FFF; color: #660000; }
+#toast.warn { background: #FFF4A0; border-color: #FFF #886600 #886600 #FFF; color: #553300; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 14px; height: 14px; }
+::-webkit-scrollbar-track { background: #D0C8B0; border: 1px inset #888; }
+::-webkit-scrollbar-thumb { background: #C0B898; border: 1px solid; border-color: #FFF #888 #888 #FFF; }
+::-webkit-scrollbar-button { background: #D0C8A8; height: 14px; border: 1px solid; border-color: #FFF #888 #888 #FFF; display: block; }
+
+/* ══════════════════════════════════════════════════════════════
+   SPLASH — background is the exact noisy blue-gray texture
+   captured pixel-by-pixel: avg rgb(85,93,110) with grain
+   ══════════════════════════════════════════════════════════════ */
+#splash-screen {
+  position:fixed; inset:0; z-index:10000;
+  display:flex; align-items:center; justify-content:center;
+  /* Exact base color from pixel analysis: rgb(85,93,110) */
+  background-color: #555d6e;
+  /* Grain noise overlay simulating the texture captured */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E");
+}
+
+/* Outer box: thin light-gray border (rgb 140-150) over dark bg */
+.spl-box {
+  width: 660px; max-width: 96vw;
+  background-color: #555d6e;
+  /* Border: top/left lighter (144,143,150), bottom lighter (204,203,206) */
+  border: 2px solid rgba(190,190,200,0.5);
+  box-shadow:
+    inset 1px 1px 0 rgba(220,220,230,0.25),
+    inset -1px -1px 0 rgba(100,100,120,0.3),
+    0 4px 24px rgba(0,0,0,0.7);
+  display:flex; flex-direction:column; overflow:hidden;
+  /* Same grain on the box */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E");
+}
+
+/* Top bar: "Licenciado pela VISUAL SISTEMAS" */
+.spl-topbar {
+  /* Same blue-gray but slightly lighter */
+  background: rgba(160,165,180,0.15);
+  padding: 5px 12px;
+  font-size: 12px; font-weight: bold; color: #e8e8f0;
+  border-bottom: 1px solid rgba(160,165,185,0.3);
+  letter-spacing: 0.3px;
+}
+
+.spl-main {
+  padding: 28px 44px 24px;
+  display: flex; flex-direction: column;
+}
+
+/* Logo row: diamond + SYSINT text */
+.spl-logo-row {
+  display: flex; align-items: center; gap: 24px; margin-bottom: 20px;
+}
+
+/* DIAMOND — exact as image: outer black square border, orange fill, white center */
+.spl-diam-outer {
+  width: 80px; height: 80px; flex-shrink: 0;
+  transform: rotate(45deg);
+  background: #0d0d0d;
+  border: 3px solid #c44000;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 10px rgba(180,50,0,0.35);
+}
+.spl-diam-mid {
+  width: 46px; height: 46px;
+  background: #c44000;
+  display: flex; align-items: center; justify-content: center;
+}
+.spl-diam-ctr {
+  width: 16px; height: 16px;
+  background: #ffffff;
+}
+
+.spl-title-col { display: flex; flex-direction: column; gap: 4px; }
+
+/* SYSINT — bold red-orange, large */
+.spl-sysint {
+  font-size: 64px; font-weight: 900; line-height: 1;
+  color: #c44000;
+  font-family: "Arial Black", "Arial Bold", Arial, sans-serif;
+  letter-spacing: 3px;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+/* SISTEMAS INTEGRADOS — spaced gray */
+.spl-sub {
+  font-size: 12px; font-weight: 400;
+  letter-spacing: 6px;
+  color: #a8b0c8;
+  text-transform: uppercase;
+}
+
+/* VISUAL Sistemas — bottom right, italic blue-white */
+.spl-vis-row { text-align: right; margin-bottom: 18px; }
+.spl-vis-word {
+  font-size: 32px; font-weight: 900; font-style: italic;
+  font-family: "Arial Black", "Arial Bold", Arial, sans-serif;
+  /* Exact: letters are light blue-white with A in orange */
+  color: #c8d8f0;
+  letter-spacing: 1px; line-height: 1;
+}
+.spl-vis-word .spl-va { color: #ff6600; }
+.spl-vis-sis {
+  font-size: 12px; font-style: italic;
+  color: #9aabcc; letter-spacing: 1px;
+}
+
+/* Progress bar */
+.spl-bar {
+  width: 100%; height: 6px;
+  background: #1a1e28;
+  overflow: hidden; margin-bottom: 8px;
+  border-radius: 1px;
+}
+.spl-prog {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #c44000, #ff7700);
+}
+.spl-lic { font-size: 11px; color: #6677aa; }
+
+/* ══════════════════════════════════════════════════════════════
+   LOGIN OVERLAY — fundo cinza neutro
+   ══════════════════════════════════════════════════════════════ */
+#login-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  display: none; align-items: center; justify-content: center;
+  background-color: #7a8090;
+}
+
+/* LOGIN BOX — caixa compacta estilo Windows clássico da imagem 2 */
+#login-box {
+  width: 360px; max-width: 98vw;
+  background: #d4c87a;
+  border-top: 2px solid #e8dfa0;
+  border-left: 2px solid #e8dfa0;
+  border-right: 2px solid #8a7a30;
+  border-bottom: 2px solid #8a7a30;
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.55);
+  overflow: hidden;
+}
+
+/* Header azul fino */
+#login-hd {
+  background: rgb(41,154,201);
+  color: #ffffff;
+  font-size: 11px; font-weight: bold;
+  padding: 4px 8px;
+  letter-spacing: 0.1px;
+}
+
+#login-body {
+  padding: 6px 8px 8px;
+  background: #d4c87a;
+}
+
+/* Linha única: logo à esquerda, campos à direita — tudo compacto */
+.lgi-top-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 0;
+}
+
+/* Logo quadrada com borda preta, bem pequena */
+.lgi-logo-sq {
+  width: 72px; flex-shrink: 0;
+  background: #d4c87a;
+  border: 2px solid #111;
+  padding: 5px 4px 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+
+/* Diamante pequeno */
+.lgi-diam-outer {
+  width: 38px; height: 38px;
+  background: #0d0d0d;
+  border: 2px solid #cc2200;
+  transform: rotate(45deg);
+  display: flex; align-items: center; justify-content: center;
+}
+.lgi-diam-mid {
+  width: 22px; height: 22px;
+  background: #cc2200;
+  display: flex; align-items: center; justify-content: center;
+}
+.lgi-diam-ctr { width: 8px; height: 8px; background: #ffffff; }
+
+/* VISUAL texto */
+.lgi-vis-word {
+  font-size: 14px; font-weight: 900; font-style: italic;
+  font-family: "Arial Black", "Arial Bold", Arial, sans-serif;
+  color: #1a3aaa; line-height: 1; margin-top: 3px;
+}
+.lgi-vis-word .lgi-va { color: #ff6600; }
+.lgi-vis-sis { font-size: 8px; font-style: italic; color: #333; }
+
+/* Campos à direita — compactos */
+.lgi-fields { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.lgi-row { display: flex; align-items: center; gap: 5px; }
+.lgi-lbl {
+  width: 52px; font-size: 11px; font-weight: bold;
+  text-align: right; color: #111; flex-shrink: 0;
+}
+.lgi-inp {
+  flex: 1; height: 20px; font-size: 11px;
+  border: 1px inset #888; background: #ffffee;
+  color: #000; padding: 1px 4px; outline: none;
+  font-family: Arial, sans-serif;
+}
+.lgi-inp:focus { background: #ffffff; }
+
+/* Separador e botões */
+.lgi-sep {
+  border: none; border-top: 1px solid #a09030;
+  margin: 7px 0 6px;
+}
+
+.lgi-btns { display: flex; gap: 8px; justify-content: center; }
+
+.lgi-btn-enter {
+  background: #e08010; color: #fff;
+  font-size: 12px; font-weight: bold;
+  border-top: 2px solid #f0c060;
+  border-left: 2px solid #f0c060;
+  border-right: 2px solid #804000;
+  border-bottom: 2px solid #804000;
+  padding: 4px 18px; cursor: pointer;
+  font-family: Arial, sans-serif;
+}
+.lgi-btn-enter:hover { background: #f09020; }
+.lgi-btn-enter:active { border-color: #804000 #f0c060 #f0c060 #804000; }
+
+.lgi-btn-exit {
+  background: #c8b860; color: #222;
+  font-size: 12px; font-weight: bold;
+  border-top: 2px solid #e8d880;
+  border-left: 2px solid #e8d880;
+  border-right: 2px solid #706020;
+  border-bottom: 2px solid #706020;
+  padding: 4px 18px; cursor: pointer;
+  font-family: Arial, sans-serif;
+}
+.lgi-btn-exit:hover { background: #d8c870; }
+.lgi-btn-exit:active { border-color: #706020 #e8d880 #e8d880 #706020; }
+
+.lgi-err {
+  min-height: 11px; font-size: 9.5px;
+  color: #cc0000; font-weight: bold;
+  text-align: center; margin-top: 3px;
+}
+
+/* ── Statusbar sync indicator ── */
+#seg-user {
+  background: #1A4A9A !important; color: #FFF !important;
+  font-weight: bold !important; padding: 0 8px !important;
+}
+.sync-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block; margin-right: 4px;
+  background: #999; vertical-align: middle;
+}
+.sync-dot.ok   { background: #44cc44; }
+.sync-dot.busy { background: #ffaa00; animation: sdPulse .7s ease infinite; }
+.sync-dot.err  { background: #cc2200; }
+@keyframes sdPulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* ── Permission denied modal ── */
+#perm-modal {
+  display: none; position: fixed; inset: 0; z-index: 8888;
+  background: rgba(0,0,0,.45);
+  align-items: center; justify-content: center;
+}
+#perm-modal.on { display: flex; }
+#perm-win {
+  background: #F5EDD8; width: 290px;
+  border: 2px solid; border-color: #FFF #777 #777 #FFF;
+  box-shadow: 4px 4px 14px rgba(0,0,0,.5);
+}
+#perm-hd {
+  background: linear-gradient(180deg, #BB6600, #884400);
+  color: #FFF; font-size: 11px; font-weight: bold;
+  padding: 4px 10px; display: flex;
+  align-items: center; justify-content: space-between;
+}
+#perm-body { padding: 16px 18px; display: flex; gap: 12px; align-items: center; }
+.perm-ico { font-size: 30px; flex-shrink: 0; }
+.perm-msg { font-size: 12px; font-weight: bold; color: #553300; line-height: 1.6; }
+#perm-foot {
+  padding: 10px; display: flex; justify-content: center;
+  border-top: 1px solid #C8B888;
+}
+.no-perm { opacity: .35 !important; cursor: not-allowed !important; }
 </style>
 </head>
 <body>
 
+<!-- ═══ SPLASH SCREEN ══════════════════════════════════════ -->
+<div id="splash-screen">
+  <div class="spl-box">
+    <div class="spl-topbar">Licenciado pela VISUAL SISTEMAS</div>
+    <div class="spl-main">
+      <div class="spl-logo-row">
+        <div class="spl-diam-outer"><div class="spl-diam-mid"><div class="spl-diam-ctr"></div></div></div>
+        <div class="spl-title-col">
+          <div class="spl-sysint">SYSINT</div>
+          <div class="spl-sub">SISTEMAS INTEGRADOS</div>
+        </div>
+      </div>
+      <div class="spl-vis-row">
+        <div class="spl-vis-word">VISU<span class="spl-va">A</span>L</div>
+        <div class="spl-vis-sis">Sistemas</div>
+      </div>
+      <div class="spl-bar"><div class="spl-prog" id="spl-prog"></div></div>
+      <div class="spl-lic">Licenciado para JAMES L H TOME &amp;CIA LTDA</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LOGIN ════════════════════════════════════════════════ -->
+<div id="login-overlay">
+  <div id="login-box">
+    <div id="login-hd">Licenciado para JAMES L H TOME &amp;CIA LTDA</div>
+    <div id="login-body">
+      <div class="lgi-top-row">
+        <div class="lgi-logo-sq">
+          <div class="lgi-diam-outer"><div class="lgi-diam-mid"><div class="lgi-diam-ctr"></div></div></div>
+          <div class="lgi-vis-word">VISU<span class="lgi-va">A</span>L</div>
+          <div class="lgi-vis-sis">Sistemas</div>
+        </div>
+        <div class="lgi-fields">
+          <div class="lgi-row">
+            <span class="lgi-lbl">Usu&#225;rio</span>
+            <input id="lgi-user" class="lgi-inp" autocomplete="off" spellcheck="false"
+              oninput="this.value=this.value.toUpperCase()" onkeydown="lgiKey(event)">
+          </div>
+          <div class="lgi-row">
+            <span class="lgi-lbl">Senha</span>
+            <input id="lgi-pass" class="lgi-inp" type="password" autocomplete="off" onkeydown="lgiKey(event)">
+          </div>
+        </div>
+      </div>
+      <div class="lgi-err" id="lgi-err"></div>
+      <hr class="lgi-sep">
+      <div class="lgi-btns">
+        <button class="lgi-btn-enter" onclick="doLogin()">&#10004; Entrar</button>
+        <button class="lgi-btn-exit"  onclick="lgiCancel()">&#215; Sair</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PERMISSÃO NEGADA ═════════════════════════════════════ -->
+<div id="perm-modal">
+  <div id="perm-win">
+    <div id="perm-hd"><span>&#9888; Aviso do Sistema</span><button class="mclose" onclick="closePerm()">&#10005;</button></div>
+    <div id="perm-body"><div class="perm-ico">&#9888;&#65039;</div><div class="perm-msg">Usu&#225;rio sem permiss&#227;o<br>para esta op&#231;&#227;o.</div></div>
+    <div id="perm-foot"><button class="vbtn prim" onclick="closePerm()">OK</button></div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════
      JANELA PRINCIPAL
      ═══════════════════════════════════ -->
-<div id="win">
+<div id="win" style="display:none">
 
   <!-- TITLEBAR -->
   <div id="titlebar">
@@ -383,7 +1326,7 @@ tbody tr.row-p { background: #FFF0A0 !important; }
     <div class="tb-right">
       <div class="tb-company">
         <div class="co">DOSPLASTICOS</div>
-        <div class="op">Comercial do Norte &nbsp; Op: Sistema</div>
+        <div class="op">Comercial do Norte &nbsp; Op: <span id="tb-op">&#8212;</span></div>
       </div>
     </div>
   </div>
@@ -577,7 +1520,7 @@ tbody tr.row-p { background: #FFF0A0 !important; }
                 <th class="ns" style="text-align:center">UNID</th>
                 <th onclick="sortBy('qtdSolicitada')" style="text-align:right">QTD SOLIC ↕</th>
                 <th class="ns" style="text-align:right">QTD ENV.</th>
-                <th onclick="sortBy('vlUnitNum')" style="text-align:right">VL UNIT. ✏ ↕</th>
+                <th onclick="sortBy('vlUnitNum')" style="text-align:right">VL UNIT. ↕</th>
                 <th onclick="sortBy('vlTotalNum')" style="text-align:right">VL TOTAL ↕</th>
                 <th class="ns" style="text-align:center">STATUS</th>
                 <th class="ns">SITUAÇÃO</th>
@@ -683,8 +1626,9 @@ tbody tr.row-p { background: #FFF0A0 !important; }
   <!-- STATUS BAR (cinza neutro) -->
   <div id="statusbar">
     <div class="seg main" id="seg-msg">Pronto — Selecione um arquivo para importar</div>
-    <div class="seg">Operador : Sistema</div>
-    <div class="seg">Usuário</div>
+    <div class="seg" id="seg-op">Operador : &#8212;</div>
+    <div class="seg" id="seg-user">&#8212;</div>
+    <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
     <div class="seg">Vrs.: 2.0.0.65</div>
   </div>
@@ -727,6 +1671,7 @@ tbody tr.row-p { background: #FFF0A0 !important; }
 <div id="toast"></div>
 
 <script>
+
 // ════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════
@@ -800,28 +1745,9 @@ async function handleFile(f) {
       setStep('Extraindo tokens...'); setProgress(25);
       var pages = await extractTokens(buf);
       setProgress(55); setStep('Detectando produtos...');
-      result = parsePDF(pages); setProgress(75);
-      // Verificar se preços foram extraídos — se menos de 30% têm preço, usar IA como fallback
-      var comPreco = (result.produtos||[]).filter(function(p){ return p.vlUnitNum > 0; }).length;
-      var totalP = (result.produtos||[]).length;
-      if (!totalP)
+      result = parsePDF(pages); setProgress(90);
+      if (!result.produtos || result.produtos.length===0)
         throw new Error('Nenhum produto encontrado. Verifique se o PDF tem texto selecionável.');
-      if (comPreco < totalP * 0.3) {
-        setStep('Complementando preços com IA...'); setProgress(80);
-        try {
-          var iaResult = await claudePDF(f);
-          // Mesclar: manter estrutura do parser mas preencher preços da IA
-          var iaMap = {};
-          (iaResult.produtos||[]).forEach(function(p){ iaMap[p.codigo] = p; });
-          result.produtos = result.produtos.map(function(p){
-            var ia = iaMap[p.codigo];
-            if (ia && ia.vlUnitNum > 0) { p.vlUnit=ia.vlUnit; p.vlTotal=ia.vlTotal; p.vlUnitNum=ia.vlUnitNum; p.vlTotalNum=ia.vlTotalNum; }
-            return p;
-          });
-          if (!result.total && iaResult.total) result.total = iaResult.total;
-        } catch(iaErr) { /* IA falhou, continua com o que temos */ }
-      }
-      setProgress(90);
     } else {
       setStep('Analisando com IA...'); setProgress(35);
       result = await claudeImage(f, ext); setProgress(90);
@@ -865,12 +1791,8 @@ function parsePDF(pages) {
     // Extrair cabeçalho do orçamento
     lines.forEach(function(l) {
       var txt = l.toks.map(function(t){return t.text;}).join(' ');
-      if (!header.numero) {
-        var mn=txt.match(/PEDIDO\s+DE\s+VENDA[:\s]+([\d]+(?:\s*\|\s*[\d]+)?)/i);
-        if(mn) header.numero=mn[1].replace(/\s*\|\s*/,'-').trim();
-        else { var mo=txt.match(/Or[çc]amento\.?[:\s]+([^\s,]+)/i); if(mo) header.numero=mo[1].trim(); }
-      }
-      if (!header.data) { var m=txt.match(/(?:Or[çc]amento|Data.*?):\s*(\d{2}\/\d{2}\/\d{4})/i); if(m) header.data=m[1]; }
+      if (!header.numero) { var m=txt.match(/(?:PEDIDO\s+DE\s+VENDA|Or[çc]amento\.?)[:\s]+([^\s]+)/i); if(m) header.numero=m[1].trim(); }
+      if (!header.data) { var m=txt.match(/(?:Or[çc]amento:|Data.*?:)\s*(\d{2}\/\d{2}\/\d{4})/i); if(m) header.data=m[1]; }
       if (!header.total) { var m=txt.match(/Produtos[:\s]*R\$\s*([\d.,]+)/i); if(m) header.total='R$ '+m[1]; }
       if (!header.gestor) { var m=txt.match(/Vendedor[:\s]+([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-z .]{2,30})/); if(m) header.gestor=m[1].trim(); }
       if (!header.cnpj) { var m=txt.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/); if(m) header.cnpj=m[1]; }
@@ -936,8 +1858,6 @@ function parsePDF(pages) {
       if(seen[dk]) continue; seen[dk]=true;
 
       var descToks=lt.filter(function(t){return t.x>codTok.x+codTok.text.length*4+2&&t.x<xUND-5;});
-      // Remover tokens que parecem EAN/código de barras embutido na descrição
-      descToks=descToks.filter(function(t){ return !/^\d{10,18}$/.test(t.text); });
       var nome=descToks.map(function(t){return t.text;}).join(' ').trim();
       if(!nome||nome.length<2) continue;
 
@@ -962,49 +1882,26 @@ function parsePDF(pages) {
         }
       }
 
-      // ── EXTRAÇÃO DE PREÇOS ──────────────────────────────────────
-      // Estratégia 1: capturar padrões "R$ X,XX" no texto bruto da linha
-      var rawLine = lt.map(function(t){ return t.text; }).join(' ');
-      var moneyMatches = rawLine.match(/R\$\s*[\d.]+,\d{2}/g) || [];
-      var moneys = moneyMatches.map(function(m){ return m.replace(/R\$\s*/,'').trim(); });
-
-      // Estratégia 2: tokens numéricos com vírgula (ex: 25,00 ou 1.260,00)
-      if (moneys.length === 0) {
-        var allMoneyToks = lt.filter(function(t){ return /^\d[\d.]*,\d{2}$/.test(t.text); });
-        allMoneyToks.sort(function(a,b){ return a.x - b.x; });
-        if (allMoneyToks.length > 2) allMoneyToks = allMoneyToks.slice(-2);
-        moneys = allMoneyToks.map(function(t){ return t.text; });
+      // VALORES: pegar todos os números "X,XX" da linha (mais robusto)
+      var allMoneyToks = lt.filter(function(t){ return /^\d[\d.]*,\d{2}$/.test(t.text); });
+      // Filtrar pela posição: preferir os mais à direita (são vlUnit e vlTotal)
+      var moneys;
+      if (xVLU > 0) {
+        var near = allMoneyToks.filter(function(t){ return t.x >= xVLU - TOL * 2; });
+        moneys = near.map(function(t){ return t.text; });
       }
-
-      // Estratégia 3: tokens "R$" seguidos de valor separado (ex: PDF CENTRO)
-      if (moneys.length === 0) {
-        var joined = [];
-        for (var mi=0; mi<lt.length-1; mi++) {
-          if (lt[mi].text === 'R$' && /^[\d.,]+$/.test(lt[mi+1].text)) {
-            joined.push(lt[mi+1].text);
-          }
-        }
-        if (joined.length >= 1) moneys = joined.slice(-2);
+      // Fallback: pegar os últimos 2 números com vírgula da linha
+      if (!moneys || moneys.length === 0) {
+        moneys = allMoneyToks.map(function(t){ return t.text; });
+        if (moneys.length > 2) moneys = moneys.slice(-2);
       }
 
       var vlU = moneys[0] || '';
       var vlT = moneys[1] || '';
       var vlUN = parseMoney(vlU);
       var vlTN = parseMoney(vlT);
-      var qtdN = parseInt(qtdStr) || 1;
-
-      // Se vlUnit > vlTotal e qtd > 1, valores podem estar invertidos
-      if (vlUN > 0 && vlTN > 0 && vlUN > vlTN && qtdN > 1) {
-        var tmp=vlU; vlU=vlT; vlT=tmp; var tmpN=vlUN; vlUN=vlTN; vlTN=tmpN;
-      }
-      // Se só vlUnit: calcular vlTotal
-      if (vlUN > 0 && vlTN === 0 && qtdN > 0) {
-        vlTN = vlUN * qtdN; vlT = vlTN.toFixed(2).replace('.',',');
-      }
-      // Se só vlTotal: calcular vlUnit
-      if (vlTN > 0 && vlUN === 0 && qtdN > 0) {
-        vlUN = vlTN / qtdN; vlU = vlUN.toFixed(2).replace('.',',');
-      }
+      // Se só um valor encontrado: pode ser vlUnit, calcular vlTotal
+      if (vlU && !vlT && qtdStr) { vlTN = vlUN * (parseInt(qtdStr)||1); vlT = vlTN.toFixed(2).replace('.',','); }
 
       produtos.push({
         codigo:codTok.text, nome:nome,
@@ -1018,28 +1915,10 @@ function parsePDF(pages) {
   return header;
 }
 
-async function claudePDF(f) {
-  var b64 = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result.split(',')[1]);}; r.onerror=function(){rej(new Error('Falha ao ler'));}; r.readAsDataURL(f); });
-  var prompt = 'Analise este pedido/orcamento de venda em PDF. Retorne SOMENTE JSON valido sem markdown:\n{"filial":"","gestor":"","numero":"","data":"DD/MM/AAAA","cnpj":"","cep":"","fone":"","email":"","endereco":"","validade":"","total":"","produtos":[{"codigo":"","nome":"","unidade":"","qtd":0,"vlUnit":"X,XX","vlTotal":"X,XX"}]}\nExtraia TODOS os produtos com vlUnit (VL UNIT.) e vlTotal (VL. TOTAL) copiados exatamente do documento.';
-  var resp = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:8000,messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}]}]})});
-  if(!resp.ok){var e=await resp.json().catch(function(){return{};});throw new Error((e&&e.error&&e.error.message)||('Erro API '+resp.status));}
-  var data=await resp.json();
-  var raw=data.content.find(function(b){return b.type==='text';});raw=raw?raw.text:'';
-  var parsed;try{parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(ex){throw new Error('IA retornou formato invalido.');}
-  // Normalizar vlUnitNum/vlTotalNum
-  (parsed.produtos||[]).forEach(function(p){
-    p.vlUnitNum=parseMoney(p.vlUnit||''); p.vlTotalNum=parseMoney(p.vlTotal||'');
-    var q=parseInt(p.qtd)||1;
-    if(p.vlUnitNum>0&&p.vlTotalNum===0) p.vlTotalNum=p.vlUnitNum*q;
-    if(p.vlTotalNum>0&&p.vlUnitNum===0&&q>0) p.vlUnitNum=p.vlTotalNum/q;
-  });
-  return parsed;
-}
-
 async function claudeImage(f, ext) {
   var b64 = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result.split(',')[1]);}; r.onerror=function(){rej(new Error('Falha ao ler'));}; r.readAsDataURL(f); });
   var mt = 'image/'+(ext==='jpg'?'jpeg':ext);
-  var prompt = 'Analise este pedido/orcamento de venda. Retorne SOMENTE JSON valido sem markdown:\n{"filial":"nome da filial","gestor":"nome do vendedor","numero":"numero do orcamento","data":"DD/MM/AAAA","cnpj":"","cep":"","fone":"","email":"","endereco":"","validade":"","total":"R$ X,XX","produtos":[{"codigo":"codigo do produto","nome":"descricao completa","unidade":"UND/MIL/CAIXA/etc","qtd":0,"vlUnit":"valor unitario sem R$ ex:25,00","vlTotal":"valor total sem R$ ex:250,00"}]}\nIMPORTANTE: extraia TODOS os produtos. Para cada produto extraia obrigatoriamente vlUnit (VL UNIT.) e vlTotal (VL. TOTAL) diretamente do documento. Nao calcule, copie os valores exatos.';
+  var prompt = 'Analise este pedido de venda. Retorne SOMENTE JSON:\n{"filial":"","gestor":"","numero":"","data":"DD/MM/AAAA","cnpj":"","cep":"","fone":"","email":"","endereco":"","validade":"","total":"R$ X,XX","produtos":[{"codigo":"","nome":"","unidade":"","qtd":0,"vlUnit":"X,XX","vlTotal":"X,XX"}]}\nExtraia TODOS os produtos com seus valores unitários e totais.';
   var resp = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:8000,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:prompt}]}]})});
   if(!resp.ok){var e=await resp.json().catch(function(){return{};});throw new Error((e&&e.error&&e.error.message)||('Erro API '+resp.status));}
   var data=await resp.json();
@@ -1108,8 +1987,6 @@ function updView(){
 function updValSum(){
   var ts=0,te=0,tc=0;
   products.forEach(function(p){
-    // Recalcular vlTotalNum se necessário
-    if(p.vlUnitNum>0 && p.vlTotalNum===0) p.vlTotalNum=p.vlUnitNum*p.qtdSolicitada;
     ts+=p.vlTotalNum;
     if(p.status==='sent') te+=p.vlTotalNum;
     else if(p.status==='cut'||p.status==='partial'){
@@ -1189,7 +2066,7 @@ function renderTbl(){
     html+='<td class="num">'+p.qtdSolicitada+'</td>';
     html+='<td><div style="display:flex;justify-content:flex-end"><input type="number" class="qi" value="'+p.qtdEnviada+'" min="0" max="'+p.qtdSolicitada+'" '+dis+' onchange="updQty('+p.id+',this.value)" onclick="event.stopPropagation()"></div></td>';
     html+='<td class="val"><div style="display:flex;justify-content:flex-end"><input type="text" class="qi" style="width:72px" placeholder="0,00" value="'+(p.vlUnit||'')+'" onchange="updVlUnit('+p.id+',this.value)" onclick="event.stopPropagation()" title="Editar preço unitário"></div></td>';
-    html+='<td class="val" style="font-weight:bold;color:'+(p.status==='cut'?'#CC0000':p.status==='partial'?'#AA6600':'#333')+'">'+(p.vlTotalNum>0?fmtMoney(p.vlTotalNum):(p.vlTotal?'R$ '+p.vlTotal:'—'))+'</td>';
+    html+='<td class="val" style="font-weight:bold;color:'+(p.status==='cut'?'#CC0000':p.status==='partial'?'#AA6600':'#333')+'">'+(p.vlTotal?'R$ '+p.vlTotal:'—')+'</td>';
     html+='<td><div class="sg">';
     html+='<button class="sb '+(p.status==='sent'?'se':'')+'" onclick="event.stopPropagation();doSt('+p.id+',\'sent\')" title="Enviado [S]">✓</button>';
     html+='<button class="sb '+(p.status==='partial'?'sp':'')+'" onclick="event.stopPropagation();doSt('+p.id+',\'partial\')" title="Parcial [P]">~</button>';
@@ -1219,18 +2096,6 @@ function updQty(id,val){
   var v=Math.max(0,Math.min(parseInt(val)||0,p.qtdSolicitada));
   p.qtdEnviada=v; p.status=v===p.qtdSolicitada?'sent':v===0?'cut':'partial';
   renderTbl(); updStats(); updValSum();
-}
-function updVlUnit(id,val){
-  var p=null; for(var i=0;i<products.length;i++){if(products[i].id===id){p=products[i];break;}}
-  if(!p) return;
-  // Aceitar tanto vírgula quanto ponto como separador decimal
-  var clean=String(val).replace(/[R$\s]/g,'').replace(/\./g,'').replace(',','.');
-  var num=parseFloat(clean)||0;
-  p.vlUnitNum=num;
-  p.vlUnit=num>0?num.toFixed(2).replace('.',','):'';
-  p.vlTotalNum=num*p.qtdSolicitada;
-  p.vlTotal=p.vlTotalNum>0?p.vlTotalNum.toFixed(2).replace('.',','):'';
-  renderTbl(); updValSum();
 }
 function quickSt(st){
   if(selRow<0&&products.length>0) selRow=products[0].id;
@@ -1343,8 +2208,6 @@ function renderHist(){
     var cut=prods.filter(function(p){return p.status==='cut';}).length;
     var par=prods.filter(function(p){return p.status==='partial';}).length;
     var pct=prods.length?Math.round(((cut+par)/prods.length)*100):0;
-    var totalVal=0; prods.forEach(function(p){totalVal+=(p.vlTotalNum||parseMoney(p.vlTotal||''));});
-    var displayTotal=totalVal>0?fmtMoney(totalVal):(h.total||'');
     var sv=new Date(h.savedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
     html+='<div class="hcard" onclick="viewHist(\''+h.id+'\')">';
     html+='<span class="hnum">Nº '+h.numero+'</span>';
@@ -1355,7 +2218,7 @@ function renderHist(){
     if(par)html+='<span class="hm hmp">~'+par+'</span>';
     if(cut)html+='<span class="hm hmc">✕'+cut+'</span>';
     html+='<span style="font-size:10px;font-weight:bold;color:'+(pct>0?'#CC0000':'#006600')+'">'+pct+'% corte</span>';
-    if(displayTotal)html+='<span style="font-size:10px;font-weight:bold;color:#AA5500">'+displayTotal+'</span>';
+    if(h.total)html+='<span style="font-size:10px;font-weight:bold;color:#AA5500">'+h.total+'</span>';
     html+='</div>';
     html+='<div class="hact" onclick="event.stopPropagation()">';
     html+='<button class="vbtn sm" onclick="loadDirect(\''+h.id+'\')">📋 Carregar</button>';
@@ -1374,30 +2237,10 @@ function viewHist(id){
   var CLR={sent:'#006600',cut:'#CC0000',partial:'#AA6600',pending:'#888'};
   var html='<div style="margin-bottom:8px;font-size:11px"><b>'+gLbl+':</b> '+h.gestor+' | <b>Data:</b> '+h.data+' | <b>Total:</b> '+h.total+'</div>';
   html+='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#CC6600;color:#FFF"><th style="padding:3px 5px;text-align:left">Código</th><th style="padding:3px 5px;text-align:left">Produto</th><th>Un.</th><th style="text-align:right">Qtd.S.</th><th style="text-align:right">Qtd.E.</th><th style="text-align:right">Vl.Unit.</th><th style="text-align:right">Vl.Total</th><th>Situação</th></tr></thead><tbody>';
-  prods.forEach(function(p,i){var bg=i%2===0?'#FFFEF5':'#F5EDD8';var vlUN=p.vlUnitNum||parseMoney(p.vlUnit||'');var vlTN=p.vlTotalNum||(vlUN*(p.qtdSolicitada||0));html+='<tr style="background:'+bg+'"><td style="padding:3px 5px;font-family:Courier New;color:#003399;font-size:10px">'+p.codigo+'</td><td style="padding:3px 5px">'+p.nome+'</td><td style="padding:3px 5px;text-align:center">'+p.unidade+'</td><td style="padding:3px 5px;text-align:right">'+p.qtdSolicitada+'</td><td style="padding:3px 5px;text-align:right">'+p.qtdEnviada+'</td><td style="padding:3px 5px;text-align:right"><input type="text" class="qi" style="width:72px;font-size:10px" placeholder="0,00" value="'+(p.vlUnit||'')+'" data-idx="'+i+'" onchange="updHistVlUnit(this,'+i+',\''+h.id+'\')" onclick="event.stopPropagation()" title="Editar preço unitário"></td><td style="padding:3px 5px;text-align:right;font-family:Courier New" id="hv-vlt-'+i+'">'+(vlTN>0?fmtMoney(vlTN):(p.vlTotal?'R$ '+p.vlTotal:'—'))+'</td><td style="padding:3px 5px;color:'+CLR[p.status]+';font-weight:bold">'+LBL[p.status]+'</td></tr>';});
+  prods.forEach(function(p,i){var bg=i%2===0?'#FFFEF5':'#F5EDD8';html+='<tr style="background:'+bg+'"><td style="padding:3px 5px;font-family:Courier New;color:#003399;font-size:10px">'+p.codigo+'</td><td style="padding:3px 5px">'+p.nome+'</td><td style="padding:3px 5px;text-align:center">'+p.unidade+'</td><td style="padding:3px 5px;text-align:right">'+p.qtdSolicitada+'</td><td style="padding:3px 5px;text-align:right">'+p.qtdEnviada+'</td><td style="padding:3px 5px;text-align:right">'+(p.vlUnit?'R$ '+p.vlUnit:'—')+'</td><td style="padding:3px 5px;text-align:right">'+(p.vlTotal?'R$ '+p.vlTotal:'—')+'</td><td style="padding:3px 5px;color:'+CLR[p.status]+';font-weight:bold">'+LBL[p.status]+'</td></tr>';});
   html+='</tbody></table>';
   document.getElementById('mhv-body').innerHTML=html;
   openM('m-hview');
-}
-function updHistVlUnit(input,idx,hid){
-  var hist=getHist();
-  var h=hist.find(function(x){return x.id===hid;});
-  if(!h||!h.products||!h.products[idx]) return;
-  var p=h.products[idx];
-  var clean=String(input.value).replace(/[R$\s]/g,'').replace(/\./g,'').replace(',','.');
-  var num=parseFloat(clean)||0;
-  p.vlUnitNum=num;
-  p.vlUnit=num>0?num.toFixed(2).replace('.',','):'';
-  p.vlTotalNum=num*(p.qtdSolicitada||0);
-  p.vlTotal=p.vlTotalNum>0?p.vlTotalNum.toFixed(2).replace('.',','):'';
-  // Atualizar total do orçamento
-  var total=0; h.products.forEach(function(x){total+=(x.vlTotalNum||parseMoney(x.vlTotal||''));});
-  h.total=total>0?fmtMoney(total):h.total;
-  setHist(hist);
-  // Atualizar célula de vl total na linha
-  var cell=document.getElementById('hv-vlt-'+idx);
-  if(cell) cell.textContent=p.vlTotalNum>0?fmtMoney(p.vlTotalNum):'—';
-  toast('✔ Preço atualizado e salvo.','ok');
 }
 function loadFromHist(){var h=getHist().find(function(x){return x.id===viewingId;});if(!h)return;closeM('m-hview');applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
 function loadDirect(id){var h=getHist().find(function(x){return x.id===id;});if(!h)return;applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
@@ -1604,8 +2447,319 @@ document.querySelectorAll('.mov').forEach(function(o){o.addEventListener('click'
 // ════════════════════════════════════════════════════════════
 // INICIALIZAÇÃO
 // ════════════════════════════════════════════════════════════
-fillFils();
+// fillFils called after login
 updStats();
+
+
+function updVlUnit(id,val){
+  var p=null; for(var i=0;i<products.length;i++){if(products[i].id===id){p=products[i];break;}}
+  if(!p) return;
+  // Aceitar tanto vírgula quanto ponto como separador decimal
+  var clean=String(val).replace(/[R$\s]/g,'').replace(/\./g,'').replace(',','.');
+  var num=parseFloat(clean)||0;
+  p.vlUnitNum=num;
+  p.vlUnit=num>0?num.toFixed(2).replace('.',','):'';
+  p.vlTotalNum=num*p.qtdSolicitada;
+  p.vlTotal=p.vlTotalNum>0?p.vlTotalNum.toFixed(2).replace('.',','):'';
+  renderTbl(); updValSum();
+}
+
+function updHistVlUnit(input,idx,hid){
+  var hist=getHist();
+  var h=hist.find(function(x){return x.id===hid;});
+  if(!h||!h.products||!h.products[idx]) return;
+  var p=h.products[idx];
+  var clean=String(input.value).replace(/[R$\s]/g,'').replace(/\./g,'').replace(',','.');
+  var num=parseFloat(clean)||0;
+  p.vlUnitNum=num;
+  p.vlUnit=num>0?num.toFixed(2).replace('.',','):'';
+  p.vlTotalNum=num*(p.qtdSolicitada||0);
+  p.vlTotal=p.vlTotalNum>0?p.vlTotalNum.toFixed(2).replace('.',','):'';
+  // Atualizar total do orçamento
+  var total=0; h.products.forEach(function(x){total+=(x.vlTotalNum||parseMoney(x.vlTotal||''));});
+  h.total=total>0?fmtMoney(total):h.total;
+  setHist(hist);
+  // Atualizar célula de vl total na linha
+  var cell=document.getElementById('hv-vlt-'+idx);
+  if(cell) cell.textContent=p.vlTotalNum>0?fmtMoney(p.vlTotalNum):'—';
+  toast('✔ Preço atualizado e salvo.','ok');
+}
+
+async function claudePDF(f) {
+  var b64 = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result.split(',')[1]);}; r.onerror=function(){rej(new Error('Falha ao ler'));}; r.readAsDataURL(f); });
+  var prompt = 'Analise este pedido/orcamento de venda em PDF. Retorne SOMENTE JSON valido sem markdown:\n{"filial":"","gestor":"","numero":"","data":"DD/MM/AAAA","cnpj":"","cep":"","fone":"","email":"","endereco":"","validade":"","total":"","produtos":[{"codigo":"","nome":"","unidade":"","qtd":0,"vlUnit":"X,XX","vlTotal":"X,XX"}]}\nExtraia TODOS os produtos com vlUnit (VL UNIT.) e vlTotal (VL. TOTAL) copiados exatamente do documento.';
+  var resp = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:8000,messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}]}]})});
+  if(!resp.ok){var e=await resp.json().catch(function(){return{};});throw new Error((e&&e.error&&e.error.message)||('Erro API '+resp.status));}
+  var data=await resp.json();
+  var raw=data.content.find(function(b){return b.type==='text';});raw=raw?raw.text:'';
+  var parsed;try{parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());}catch(ex){throw new Error('IA retornou formato invalido.');}
+  // Normalizar vlUnitNum/vlTotalNum
+  (parsed.produtos||[]).forEach(function(p){
+    p.vlUnitNum=parseMoney(p.vlUnit||''); p.vlTotalNum=parseMoney(p.vlTotal||'');
+    var q=parseInt(p.qtd)||1;
+    if(p.vlUnitNum>0&&p.vlTotalNum===0) p.vlTotalNum=p.vlUnitNum*q;
+    if(p.vlTotalNum>0&&p.vlUnitNum===0&&q>0) p.vlUnitNum=p.vlTotalNum/q;
+  });
+  return parsed;
+}
+// ═══════════════════════════════════════════════════════════════
+// SISTEMA DE USUARIOS & SINCRONIZACAO — Comercial do Norte
+// Usuário TRANSFERENCIA (senha 574092): acesso total
+// Usuário GERENTE       (senha 924057): somente leitura
+// ═══════════════════════════════════════════════════════════════
+var USERS = {
+  'TRANSFERENCIA': { pw: '574092', role: 'admin'  },
+  'GERENTE':       { pw: '924057', role: 'viewer' }
+};
+var SYNC_PFX    = 'vsorc_sync_';
+var CURRENT_USER = null;
+var syncTimer   = null;
+var lastSyncTs  = 0;
+
+// ── SPLASH ──────────────────────────────────────────────────
+(function runSplash() {
+  var prog = document.getElementById('spl-prog');
+  if (!prog) return;
+  var w = 0;
+  var iv = setInterval(function() {
+    w += 2.5; prog.style.width = Math.min(w,100) + '%';
+    if (w >= 100) clearInterval(iv);
+  }, 50);  // 2 seconds total
+  setTimeout(function() {
+    var sp = document.getElementById('splash-screen');
+    if (sp) sp.style.display = 'none';
+    var lo = document.getElementById('login-overlay');
+    if (lo) lo.style.display = 'flex';
+    setTimeout(function() {
+      var u = document.getElementById('lgi-user');
+      if (u) u.focus();
+    }, 80);
+  }, 2200);
+})();
+
+// ── LOGIN ───────────────────────────────────────────────────
+function lgiKey(e) {
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    var u = document.getElementById('lgi-user');
+    var p = document.getElementById('lgi-pass');
+    if (document.activeElement === u) p.focus();
+    else doLogin();
+  }
+}
+
+function doLogin() {
+  var uEl  = document.getElementById('lgi-user');
+  var pEl  = document.getElementById('lgi-pass');
+  var errEl = document.getElementById('lgi-err');
+  var uname = (uEl.value || '').trim().toUpperCase();
+  var pw    = pEl.value || '';
+  errEl.textContent = '';
+  if (!uname || !pw) { errEl.textContent = 'Informe usu\u00e1rio e senha.'; return; }
+  var ud = USERS[uname];
+  if (!ud || pw !== ud.pw) {
+    errEl.textContent = 'Usu\u00e1rio ou senha inv\u00e1lidos.';
+    pEl.value = ''; pEl.focus(); return;
+  }
+  // Login OK
+  CURRENT_USER = { name: uname, role: ud.role };
+  uEl.value = ''; pEl.value = '';
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('win').style.display = '';
+  // Atualizar nomes
+  var el;
+  el = document.getElementById('tb-op');    if (el) el.textContent = uname;
+  el = document.getElementById('seg-op');   if (el) el.textContent = 'Operador : ' + uname;
+  el = document.getElementById('seg-user'); if (el) { el.textContent = uname; el.style.background='#1A4A9A'; el.style.color='#FFF'; el.style.fontWeight='bold'; }
+  // Inicializar app
+  fillFils(); renderHist(); updStats();
+  // Permissões visuais
+  applyPerms();
+  // Sincronização
+  startSync();
+  toast('\u2714 Bem-vindo, ' + uname + '!', 'ok');
+}
+
+function lgiCancel() {
+  document.getElementById('lgi-err').textContent = 'Fa\u00e7a login para continuar.';
+  document.getElementById('lgi-user').focus();
+}
+
+// ── PERMISSÕES ──────────────────────────────────────────────
+// Ações permitidas para GERENTE (viewer)
+var VIEWER_OK = {
+  expExcel:1, expPDF:1, expAnaPDF:1, expAnaExcel:1,
+  toggleRel:1, showCuts:1, buildAna:1, switchTab:1,
+  renderHist:1, viewHist:1, closeM:1, closePerm:1, fillFils:1
+};
+
+function applyPerms() {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'viewer') return;
+  // Marcar botões restritos na toolbar com classe no-perm
+  document.querySelectorAll('.tb-btn').forEach(function(btn) {
+    var oc = btn.getAttribute('onclick') || '';
+    var title = btn.getAttribute('title') || '';
+    var txt = oc + ' ' + title;
+    var allowed = /expExcel|expPDF|toggleRel|showCuts|buildAna|expAna/.test(txt);
+    if (!allowed) btn.classList.add('no-perm');
+  });
+}
+
+function checkPerm(action) {
+  if (!CURRENT_USER) { showPerm(); return false; }
+  if (CURRENT_USER.role === 'viewer') {
+    if (!VIEWER_OK[action]) { showPerm(); return false; }
+  }
+  return true;
+}
+
+function showPerm() { document.getElementById('perm-modal').classList.add('on'); }
+function closePerm() { document.getElementById('perm-modal').classList.remove('on'); }
+
+// ── INTERCEPTORES DE CLIQUE (somente botões .no-perm) ──────
+// Usa capture mas apenas intercepta quando o botão tem .no-perm
+document.getElementById('win').addEventListener('click', function(e) {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'viewer') return;
+  var btn = e.target.closest('.tb-btn, button');
+  if (!btn || btn.classList.contains('mclose')) return;
+  if (btn.classList.contains('no-perm')) {
+    e.stopImmediatePropagation(); e.preventDefault(); showPerm();
+  }
+}, true);
+
+// Bloquear importação para viewer
+document.getElementById('btn-import').addEventListener('click', function(e) {
+  if (CURRENT_USER && CURRENT_USER.role === 'viewer') {
+    e.stopImmediatePropagation(); e.preventDefault(); showPerm();
+  }
+}, true);
+document.getElementById('btn-upl') && document.getElementById('btn-upl').addEventListener('click', function(e) {
+  if (CURRENT_USER && CURRENT_USER.role === 'viewer') {
+    e.stopImmediatePropagation(); e.preventDefault(); showPerm();
+  }
+}, true);
+document.addEventListener('drop', function(e) {
+  if (CURRENT_USER && CURRENT_USER.role === 'viewer') {
+    e.preventDefault(); e.stopImmediatePropagation(); showPerm();
+  }
+}, true);
+
+// Teclas restritas para viewer (F1-F3, F8-F9, S/P/C/Esc)
+document.addEventListener('keydown', function(e) {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'viewer') return;
+  if (e.target && (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
+  var blocked = ['F1','F2','F3','F8','F9','s','S','p','P','c','C','Escape'];
+  if (blocked.indexOf(e.key) >= 0) {
+    e.stopImmediatePropagation(); e.preventDefault(); showPerm();
+  }
+}, true);
+
+// Wrapper de funções restritas
+function _wrap(fname, fn) {
+  var action = fname;
+  return function() {
+    if (!checkPerm(action)) return;
+    return fn.apply(this, arguments);
+  };
+}
+
+markAllSent    = _wrap('markAllSent',    markAllSent);
+resetAll       = _wrap('resetAll',       resetAll);
+saveOrc        = _wrap('saveOrc',        saveOrc);
+newImport      = _wrap('newImport',      newImport);
+addManual      = _wrap('addManual',      addManual);
+doSt           = _wrap('doSt',           doSt);
+updQty         = _wrap('updQty',         updQty);
+updVlUnit      = _wrap('updVlUnit',      updVlUnit);
+loadFromHist   = _wrap('loadFromHist',   loadFromHist);
+delHistItem    = _wrap('delHistItem',    delHistItem);
+clearHist      = _wrap('clearHist',      clearHist);
+loadDirect     = _wrap('loadDirect',     loadDirect);
+delDirect      = _wrap('delDirect',      delDirect);
+startEdit      = _wrap('startEdit',      startEdit);
+updHistVlUnit  = _wrap('updHistVlUnit',  updHistVlUnit);
+
+// ── SINCRONIZAÇÃO FIREBASE REALTIME DATABASE ────────────────
+// Banco de dados em tempo real — funciona em qualquer computador
+// Firebase Realtime DB (plano gratuito Spark — sem custo)
+var FIREBASE_URL = 'https://comercial-norte-default-rtdb.firebaseio.com';
+
+function syncKey() {
+  // Both users share the same data store (TRANSFERENCIA writes, GERENTE reads)
+  return 'transferencia';
+}
+
+function setSyncSt(state, msg) {
+  var dot = document.getElementById('sync-dot');
+  var txt = document.getElementById('sync-txt');
+  if (dot) dot.className = 'sync-dot ' + state;
+  if (txt) txt.textContent = msg;
+}
+
+async function pushSync() {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+  setSyncSt('busy', 'Salvando...');
+  try {
+    var payload = { ts: Date.now(), data: getHist(), user: CURRENT_USER.name };
+    var url = FIREBASE_URL + '/usuarios/' + syncKey() + '/historico.json';
+    var resp = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    lastSyncTs = payload.ts;
+    setSyncSt('ok', 'Sincronizado ✓');
+  } catch(e) {
+    // Fallback: salva só localmente
+    setSyncSt('ok', 'Salvo local ✓');
+  }
+}
+
+async function pullSync() {
+  if (!CURRENT_USER) return;
+  setSyncSt('busy', 'Verificando...');
+  try {
+    var url = FIREBASE_URL + '/usuarios/' + syncKey() + '/historico.json';
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var remote = await resp.json();
+    if (remote && remote.ts && remote.ts > lastSyncTs) {
+      // Dados remotos mais recentes — atualizar local
+      localStorage.setItem(STORE_KEY, JSON.stringify(remote.data || []));
+      lastSyncTs = remote.ts;
+      fillFils();
+      if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
+      setSyncSt('ok', 'Atualizado ✓');
+    } else if (CURRENT_USER.role === 'admin') {
+      // Local mais recente — enviar para nuvem
+      await pushSync();
+    } else {
+      setSyncSt('ok', 'Sincronizado ✓');
+    }
+  } catch(e) {
+    setSyncSt('err', 'Offline');
+  }
+}
+
+function startSync() {
+  pullSync();
+  if (syncTimer) clearInterval(syncTimer);
+  // Atualiza a cada 20 segundos
+  syncTimer = setInterval(pullSync, 20000);
+}
+
+// Auto-push após salvar histórico
+var _origSetHistForSync = setHist;
+setHist = function(h) {
+  _origSetHistForSync(h);
+  if (CURRENT_USER && CURRENT_USER.role === 'admin') {
+    clearTimeout(setHist._t);
+    setHist._t = setTimeout(pushSync, 600);
+  }
+};
+
+
 </script>
 </body>
 </html>
