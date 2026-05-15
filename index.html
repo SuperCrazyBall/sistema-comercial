@@ -372,83 +372,7 @@ tbody tr.row-p { background: #FFF0A0 !important; }
 <!-- ═══════════════════════════════════
      JANELA PRINCIPAL
      ═══════════════════════════════════ -->
-<!-- ═══════════════════════════════════
-     SPLASH SCREEN
-     ═══════════════════════════════════ -->
-<div id="splash-screen">
-  <div class="splash-box">
-    <div class="splash-diamond"><span>◆</span></div>
-    <div class="splash-title">SYS<span>INT</span></div>
-    <div class="splash-sub">Sistemas Integrados</div>
-    <div style="margin-top:10px;font-size:11px;font-style:italic;color:#AABBDD">
-      <span style="font-size:16px;font-weight:900;color:#4488FF;font-style:italic">VISU<span style="color:#FF6600">A</span>L</span>
-      <span style="font-size:10px;color:#8899BB;display:block;letter-spacing:1px">Sistemas</span>
-    </div>
-    <div class="splash-bar"><div class="splash-prog"></div></div>
-    <div class="splash-lic">Licenciado para JAMES L H TOME &amp;CIA LTDA</div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════
-     TELA DE LOGIN
-     ═══════════════════════════════════ -->
-<div id="login-overlay" style="display:none">
-  <div id="login-box">
-    <div id="login-hd">
-      <span>Licenciado para JAMES L H TOME &amp;CIA LTDA</span>
-    </div>
-    <div id="login-body">
-      <div class="login-logo-row">
-        <div class="login-logo-box">
-          <div class="login-logo-sysint">◆ SYSINT</div>
-          <div style="font-size:8px;color:#888;letter-spacing:.5px">SISTEMAS INTEGRADOS</div>
-          <div style="margin-top:5px">
-            <span class="login-logo-vis">VISU<span>A</span>L</span>
-            <div class="login-logo-sis">Sistemas</div>
-          </div>
-        </div>
-        <div style="flex:1">
-          <div class="login-field-row">
-            <span class="login-field-lbl">Usuário</span>
-            <input id="login-user" class="login-field-inp" autocomplete="off" spellcheck="false"
-              oninput="this.value=this.value.toUpperCase()" onkeydown="loginKey(event)">
-          </div>
-          <div class="login-field-row">
-            <span class="login-field-lbl">Senha</span>
-            <input id="login-pass" class="login-field-inp" type="password"
-              onkeydown="loginKey(event)">
-          </div>
-        </div>
-      </div>
-      <div class="login-err" id="login-err"></div>
-      <div class="login-btns">
-        <button class="vbtn prim" onclick="doLogin()">✔ Entrar</button>
-        <button class="vbtn" onclick="loginCancel()">✕ Sair</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════
-     MODAL PERMISSÃO NEGADA
-     ═══════════════════════════════════ -->
-<div id="perm-modal">
-  <div id="perm-win">
-    <div id="perm-hd">
-      <span>⚠ Aviso</span>
-      <button class="mclose" onclick="closePerm()">✕</button>
-    </div>
-    <div id="perm-body">
-      <div class="perm-ico">⚠️</div>
-      <div class="perm-msg">Usuário sem permissão para esta opção.</div>
-    </div>
-    <div id="perm-foot">
-      <button class="vbtn prim" onclick="closePerm()">OK</button>
-    </div>
-  </div>
-</div>
-
-<div id="win" style="display:none">
+<div id="win">
 
   <!-- TITLEBAR -->
   <div id="titlebar">
@@ -459,7 +383,7 @@ tbody tr.row-p { background: #FFF0A0 !important; }
     <div class="tb-right">
       <div class="tb-company">
         <div class="co">DOSPLASTICOS</div>
-        <div class="op">Comercial do Norte &nbsp; Op: <span id="tb-op-name">—</span></div>
+        <div class="op">Comercial do Norte &nbsp; Op: Sistema</div>
       </div>
     </div>
   </div>
@@ -759,9 +683,8 @@ tbody tr.row-p { background: #FFF0A0 !important; }
   <!-- STATUS BAR (cinza neutro) -->
   <div id="statusbar">
     <div class="seg main" id="seg-msg">Pronto — Selecione um arquivo para importar</div>
-    <div class="seg" id="seg-op">Operador : —</div>
-    <div class="seg user-badge" id="seg-user">—</div>
-    <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">—</span></div>
+    <div class="seg">Operador : Sistema</div>
+    <div class="seg">Usuário</div>
     <div class="seg" id="seg-d"></div>
     <div class="seg">Vrs.: 2.0.0.65</div>
   </div>
@@ -855,8 +778,8 @@ function toast(m, t) { var e=document.getElementById('toast'); e.textContent=m; 
 // UPLOAD
 // ════════════════════════════════════════════════════════════
 var fi = document.getElementById('file-input');
-document.getElementById('btn-import').addEventListener('click', function(){ if(!checkPerm('import'))return; fi.click(); });
-document.getElementById('btn-upl').addEventListener('click', function(e){ e.stopPropagation(); if(!checkPerm('import'))return; fi.click(); });
+document.getElementById('btn-import').addEventListener('click', function(){ fi.click(); });
+document.getElementById('btn-upl').addEventListener('click', function(e){ e.stopPropagation(); fi.click(); });
 var uz = document.getElementById('upload-zone');
 uz.addEventListener('dragover', function(e){ e.preventDefault(); uz.classList.add('dov'); });
 uz.addEventListener('dragleave', function(){ uz.classList.remove('dov'); });
@@ -1205,7 +1128,7 @@ function updValSum(){
 // ════════════════════════════════════════════════════════════
 // EDIÇÃO
 // ════════════════════════════════════════════════════════════
-function startEdit(){if(!checkPerm('startEdit'))return;
+function startEdit(){
   hide('iv'); show('ie');
   var sel=document.getElementById('ef-f');
   var known=['MATRIZ','CENTRO','CIDADE NOVA','JURUNAS','GUAMÁ','CEASA','PEDREIRA','DEPÓSITO','DEPÓSITO 2','DESCONHECIDA'];
@@ -1256,7 +1179,7 @@ function renderTbl(){
   for(var i=0;i<list.length;i++){
     var p=list[i];
     var rc=p.status==='sent'?'row-s':p.status==='cut'?'row-c':p.status==='partial'?'row-p':'';
-    var isViewer=(currentUser&&currentUser.role==='viewer');var dis=isViewer?'disabled':(p.status==='cut'||p.status==='pending'?'disabled':'');
+    var dis=p.status==='cut'||p.status==='pending'?'disabled':'';
     var sel=selRow===p.id?'outline:2px solid #003399;outline-offset:-2px;':'';
     html+='<tr class="'+rc+'" id="tr-'+p.id+'" style="'+sel+'" onclick="selR('+p.id+')">';
     html+='<td class="rn">'+(i+1)+'</td>';
@@ -1265,7 +1188,7 @@ function renderTbl(){
     html+='<td class="un">'+p.unidade+'</td>';
     html+='<td class="num">'+p.qtdSolicitada+'</td>';
     html+='<td><div style="display:flex;justify-content:flex-end"><input type="number" class="qi" value="'+p.qtdEnviada+'" min="0" max="'+p.qtdSolicitada+'" '+dis+' onchange="updQty('+p.id+',this.value)" onclick="event.stopPropagation()"></div></td>';
-    html+='<td class="val"><div style="display:flex;justify-content:flex-end"><input type="text" class="qi" style="width:72px" placeholder="0,00" value="'+(p.vlUnit||'')+'" '+(isViewer?'readonly disabled':'onchange="updVlUnit('+p.id+',this.value)"')+' onclick="event.stopPropagation()" title="'+(isViewer?'Apenas visualização':'Editar preço unitário')+'"></div></td>';
+    html+='<td class="val"><div style="display:flex;justify-content:flex-end"><input type="text" class="qi" style="width:72px" placeholder="0,00" value="'+(p.vlUnit||'')+'" onchange="updVlUnit('+p.id+',this.value)" onclick="event.stopPropagation()" title="Editar preço unitário"></div></td>';
     html+='<td class="val" style="font-weight:bold;color:'+(p.status==='cut'?'#CC0000':p.status==='partial'?'#AA6600':'#333')+'">'+(p.vlTotalNum>0?fmtMoney(p.vlTotalNum):(p.vlTotal?'R$ '+p.vlTotal:'—'))+'</td>';
     html+='<td><div class="sg">';
     html+='<button class="sb '+(p.status==='sent'?'se':'')+'" onclick="event.stopPropagation();doSt('+p.id+',\'sent\')" title="Enviado [S]">✓</button>';
@@ -1281,7 +1204,7 @@ function renderTbl(){
 }
 
 function selR(id){ selRow=id; renderTbl(); }
-function doSt(id,st){if(!checkPerm('doSt'))return;
+function doSt(id,st){
   var p=null; for(var i=0;i<products.length;i++){if(products[i].id===id){p=products[i];break;}}
   if(!p) return;
   if(st==='cut'){p.status='cut';p.qtdEnviada=0;}
@@ -1290,14 +1213,14 @@ function doSt(id,st){if(!checkPerm('doSt'))return;
   else{p.status='pending';p.qtdEnviada=p.qtdSolicitada;}
   renderTbl(); updStats(); updValSum();
 }
-function updQty(id,val){if(!checkPerm('updQty'))return;
+function updQty(id,val){
   var p=null; for(var i=0;i<products.length;i++){if(products[i].id===id){p=products[i];break;}}
   if(!p) return;
   var v=Math.max(0,Math.min(parseInt(val)||0,p.qtdSolicitada));
   p.qtdEnviada=v; p.status=v===p.qtdSolicitada?'sent':v===0?'cut':'partial';
   renderTbl(); updStats(); updValSum();
 }
-function updVlUnit(id,val){if(!checkPerm('updVlUnit'))return;
+function updVlUnit(id,val){
   var p=null; for(var i=0;i<products.length;i++){if(products[i].id===id){p=products[i];break;}}
   if(!p) return;
   // Aceitar tanto vírgula quanto ponto como separador decimal
@@ -1336,8 +1259,8 @@ function updStats(){
   document.getElementById('ftr-sum').textContent=products.length+' itens | '+(c.sent||0)+' enviados | '+cuts+' cortes ('+pct+'%)';
   setStatus(products.length+' itens | '+(c.sent||0)+' enviados | '+cuts+' cortes');
 }
-function markAllSent(){if(!checkPerm('markAllSent'))return;products.forEach(function(p){p.status='sent';p.qtdEnviada=p.qtdSolicitada;});renderTbl();updStats();updValSum();toast('✔ Todos marcados Enviado.','ok');}
-function resetAll(){if(!checkPerm('resetAll'))return;products.forEach(function(p){p.status='pending';p.qtdEnviada=p.qtdSolicitada;});renderTbl();updStats();updValSum();toast('↺ Seleções limpas.');}
+function markAllSent(){products.forEach(function(p){p.status='sent';p.qtdEnviada=p.qtdSolicitada;});renderTbl();updStats();updValSum();toast('✔ Todos marcados Enviado.','ok');}
+function resetAll(){products.forEach(function(p){p.status='pending';p.qtdEnviada=p.qtdSolicitada;});renderTbl();updStats();updValSum();toast('↺ Seleções limpas.');}
 
 function showCuts(){
   var cuts=products.filter(function(p){return p.status==='cut'||p.status==='partial';});
@@ -1385,7 +1308,6 @@ function saveOrc(){
     endereco:orderInfo.endereco,validade:orderInfo.validade,total:orderInfo.total,
     products:products.map(function(p){return Object.assign({},p);})
   };
-  if(!checkPerm('saveOrc')) return;
   var ex=hist.findIndex(function(h){return h.numero===orderInfo.numero&&h.filial===orderInfo.filial;});
   if(ex>=0){rec.id=hist[ex].id;hist[ex]=rec;toast('✔ Orçamento atualizado no histórico!','ok');}
   else{hist.unshift(rec);toast('✔ Orçamento salvo no histórico!','ok');}
@@ -1457,7 +1379,7 @@ function viewHist(id){
   document.getElementById('mhv-body').innerHTML=html;
   openM('m-hview');
 }
-function updHistVlUnit(input,idx,hid){if(!checkPerm('updHistVlUnit'))return;
+function updHistVlUnit(input,idx,hid){
   var hist=getHist();
   var h=hist.find(function(x){return x.id===hid;});
   if(!h||!h.products||!h.products[idx]) return;
@@ -1477,11 +1399,11 @@ function updHistVlUnit(input,idx,hid){if(!checkPerm('updHistVlUnit'))return;
   if(cell) cell.textContent=p.vlTotalNum>0?fmtMoney(p.vlTotalNum):'—';
   toast('✔ Preço atualizado e salvo.','ok');
 }
-function loadFromHist(){if(!checkPerm('loadFromHist'))return;var h=getHist().find(function(x){return x.id===viewingId;});if(!h)return;closeM('m-hview');applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
-function loadDirect(id){if(!checkPerm('loadDirect'))return;var h=getHist().find(function(x){return x.id===id;});if(!h)return;applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
-function delDirect(id){if(!checkPerm('delDirect'))return;if(!confirm('Excluir este orçamento?'))return;var hist=getHist().filter(function(h){return h.id!==id;});setHist(hist);renderHist();fillFils();toast('Excluído.','warn');}
-function delHistItem(){if(!checkPerm('delHistItem'))return;if(!viewingId)return;if(!confirm('Excluir?'))return;var hist=getHist().filter(function(h){return h.id!==viewingId;});setHist(hist);closeM('m-hview');renderHist();fillFils();toast('Excluído.','warn');}
-function clearHist(){if(!checkPerm('clearHist'))return;if(!confirm('Apagar TODO o histórico?'))return;localStorage.removeItem(STORE_KEY);renderHist();fillFils();toast('Histórico apagado.','warn');}
+function loadFromHist(){var h=getHist().find(function(x){return x.id===viewingId;});if(!h)return;closeM('m-hview');applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
+function loadDirect(id){var h=getHist().find(function(x){return x.id===id;});if(!h)return;applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
+function delDirect(id){if(!confirm('Excluir este orçamento?'))return;var hist=getHist().filter(function(h){return h.id!==id;});setHist(hist);renderHist();fillFils();toast('Excluído.','warn');}
+function delHistItem(){if(!viewingId)return;if(!confirm('Excluir?'))return;var hist=getHist().filter(function(h){return h.id!==viewingId;});setHist(hist);closeM('m-hview');renderHist();fillFils();toast('Excluído.','warn');}
+function clearHist(){if(!confirm('Apagar TODO o histórico?'))return;localStorage.removeItem(STORE_KEY);renderHist();fillFils();toast('Histórico apagado.','warn');}
 
 // ════════════════════════════════════════════════════════════
 // ANALYTICS
@@ -1599,134 +1521,14 @@ function printRows(rows,title){
   var CLR={sent:'#226600',cut:'#AA0000',partial:'#885500',pending:'#555'};
   var trs=rows.map(function(p){return'<tr><td>'+p.codigo+'</td><td>'+p.nome+'</td><td>'+p.unidade+'</td><td align=right>'+p.qtdSolicitada+'</td><td align=right>'+p.qtdEnviada+'</td><td align=right>'+(p.vlUnit?'R$ '+p.vlUnit:'—')+'</td><td align=right>'+(p.vlTotal?'R$ '+p.vlTotal:'—')+'</td><td style="color:'+CLR[p.status]+';font-weight:bold">'+LBL2[p.status]+'</td></tr>';}).join('');
   var w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>body{font-family:Arial,sans-serif;padding:16px;font-size:10px;color:#000}.brand{color:#CC7000;font-weight:bold;font-size:13px;font-style:italic}h2{font-size:12px;font-weight:bold;margin:4px 0;font-style:italic}.sub{font-size:9px;color:#444;line-height:1.6;margin-bottom:8px;border-bottom:1px solid #CCC;padding-bottom:6px}table{width:100%;border-collapse:collapse}th{background:#CC6600;color:#FFF;padding:3px 4px;font-size:8.5px;font-style:italic;font-weight:bold;border:1px solid #AA4400}td{padding:3px 4px;border:1px solid #DDD;font-size:9.5px}tr:nth-child(even){background:#FFF8E7}
-/* ════════════════════════════════════════════════════════
-   TELA DE LOGIN — estilo Visual Sistemas
-   ════════════════════════════════════════════════════════ */
-#login-overlay {
-  position: fixed; inset: 0; z-index: 9999;
-  background: #1a2a4a;
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column;
-}
-#splash-screen {
-  position: fixed; inset: 0; z-index: 10000;
-  background: #1a2a4a;
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column;
-  animation: splashFade 0.6s ease 1.8s forwards;
-}
-@keyframes splashFade { to { opacity:0; pointer-events:none; } }
-.splash-box {
-  width: 380px; background: #2a3a5a;
-  border: 2px solid #3a5a9a; border-radius: 2px;
-  padding: 28px 24px; text-align: center;
-  box-shadow: 0 0 40px rgba(0,0,80,.8);
-}
-.splash-diamond {
-  width: 60px; height: 60px; background: #CC2200;
-  transform: rotate(45deg); margin: 0 auto 14px;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 18px rgba(200,50,0,.5);
-}
-.splash-diamond span {
-  transform: rotate(-45deg); color: #FFF;
-  font-size: 28px; font-weight: bold; font-family: serif;
-  display: block;
-}
-.splash-title {
-  font-size: 28px; font-weight: 900; letter-spacing: 3px;
-  color: #FF3300; font-family: 'Arial Black', Arial, sans-serif;
-  text-shadow: 2px 2px 8px rgba(0,0,0,.8);
-}
-.splash-title span { color: #FFAA00; }
-.splash-sub { font-size: 12px; color: #8899BB; letter-spacing: 2px; margin-top: 4px; text-transform: uppercase; }
-.splash-lic { font-size: 9.5px; color: #6677AA; margin-top: 18px; border-top: 1px solid #3a5a9a; padding-top: 8px; }
-.splash-bar { width: 100%; height: 4px; background: #1a2a4a; margin-top: 14px; border-radius: 2px; overflow: hidden; }
-.splash-prog { height: 100%; width: 0; background: linear-gradient(90deg,#FF3300,#FFAA00); animation: progAnim 1.8s ease forwards; }
-@keyframes progAnim { to { width: 100%; } }
-
-/* Login box */
-#login-box {
-  background: #F5EDD8;
-  border: 2px solid; border-color: #FFF #888 #888 #FFF;
-  box-shadow: 4px 4px 16px rgba(0,0,0,.6);
-  width: 310px;
-}
-#login-hd {
-  background: linear-gradient(180deg, #1A4A9A 0%, #0A2A6A 100%);
-  color: #FFF; font-size: 10px; font-weight: bold;
-  padding: 3px 8px; display: flex; align-items: center; justify-content: space-between;
-}
-#login-body {
-  padding: 14px 16px 10px;
-  display: flex; flex-direction: column; gap: 0;
-}
-.login-logo-row {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
-}
-.login-logo-box {
-  background: #EEE; border: 2px inset #999;
-  padding: 4px 8px; display: flex; flex-direction: column; align-items: center;
-}
-.login-logo-sysint { font-size: 8px; color: #CC2200; font-weight: bold; letter-spacing: .5px; }
-.login-logo-diamond {
-  width: 22px; height: 22px; background: #CC2200; transform: rotate(45deg);
-  margin: 2px auto; display: flex; align-items: center; justify-content: center;
-}
-.login-logo-diamond span { transform: rotate(-45deg); color:#FFF; font-size:12px; font-weight:bold; }
-.login-logo-vis { font-size: 14px; font-weight: 900; color: #1A4A9A; font-style: italic; }
-.login-logo-vis span { color: #FF6600; }
-.login-logo-sis { font-size: 8px; color: #555; font-style: italic; }
-.login-field-row {
-  display: flex; align-items: center; gap: 6px; margin-bottom: 7px;
-}
-.login-field-lbl {
-  width: 60px; font-size: 11px; font-weight: bold; text-align: right; flex-shrink: 0;
-}
-.login-field-inp {
-  flex: 1; height: 22px; font-size: 11px; font-family: Arial, sans-serif;
-  border: 2px inset #888; background: #FFF; color: #000; padding: 1px 4px; outline: none;
-}
-.login-field-inp:focus { background: #FFFFF0; }
-.login-btns {
-  display: flex; gap: 4px; justify-content: flex-end; margin-top: 10px; border-top: 1px solid #C8B888; padding-top: 8px;
-}
-.login-err { color: #CC0000; font-size: 10px; font-weight: bold; text-align: center; min-height: 14px; margin-top: 2px; }
-
-/* Bloqueio de permissão */
-#perm-modal {
-  display: none; position: fixed; inset: 0; z-index: 8888;
-  background: rgba(0,0,0,.5); align-items: center; justify-content: center;
-}
-#perm-modal.on { display: flex; }
-#perm-win {
-  background: #F5EDD8; border: 2px solid; border-color: #FFF #888 #888 #FFF;
-  box-shadow: 4px 4px 12px rgba(0,0,0,.5); width: 280px;
-}
-#perm-hd { background: linear-gradient(180deg,#AA6600,#885500); color:#FFF; font-size:10px; font-weight:bold; padding:3px 8px; display:flex; align-items:center; justify-content:space-between; }
-#perm-body { padding: 14px 16px; display:flex; gap:10px; align-items:flex-start; }
-.perm-ico { font-size: 28px; flex-shrink: 0; }
-.perm-msg { font-size: 11px; font-weight: bold; color: #553300; line-height: 1.5; }
-#perm-foot { padding: 8px; display:flex; justify-content:center; border-top:1px solid #C8B888; }
-
-/* User badge na statusbar */
-.user-badge { background: #1A4A9A; color: #FFF; font-size: 9.5px; font-weight: bold; padding: 0 6px; }
-
-/* Sync indicator */
-.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #888; display: inline-block; margin-right: 4px; }
-.sync-dot.ok { background: #44BB44; }
-.sync-dot.busy { background: #FFAA00; animation: syncPulse .8s infinite; }
-.sync-dot.err { background: #CC0000; }
-@keyframes syncPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-</style></head><body><div class="brand">comercial do norte — VSOrçamentos</div><h2>'+title+'</h2><div class="sub">'+gLbl+': <b>'+orderInfo.gestor+'</b> | Nº: <b>'+orderInfo.numero+'</b> | Data: <b>'+orderInfo.data+'</b><br>Filial: <b>'+orderInfo.filial+'</b> | CNPJ: '+orderInfo.cnpj+'<br>Endereço: '+orderInfo.endereco+'<br>Gerado: '+new Date().toLocaleString('pt-BR')+'</div><table><thead><tr><th>Código</th><th>Descrição</th><th>Un.</th><th>Qtd.S.</th><th>Qtd.E.</th><th>Vl.Unit.</th><th>Vl.Total</th><th>Situação</th></tr></thead><tbody>'+trs+'</tbody></table></body></html>');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>body{font-family:Arial,sans-serif;padding:16px;font-size:10px;color:#000}.brand{color:#CC7000;font-weight:bold;font-size:13px;font-style:italic}h2{font-size:12px;font-weight:bold;margin:4px 0;font-style:italic}.sub{font-size:9px;color:#444;line-height:1.6;margin-bottom:8px;border-bottom:1px solid #CCC;padding-bottom:6px}table{width:100%;border-collapse:collapse}th{background:#CC6600;color:#FFF;padding:3px 4px;font-size:8.5px;font-style:italic;font-weight:bold;border:1px solid #AA4400}td{padding:3px 4px;border:1px solid #DDD;font-size:9.5px}tr:nth-child(even){background:#FFF8E7}</style></head><body><div class="brand">comercial do norte — VSOrçamentos</div><h2>'+title+'</h2><div class="sub">'+gLbl+': <b>'+orderInfo.gestor+'</b> | Nº: <b>'+orderInfo.numero+'</b> | Data: <b>'+orderInfo.data+'</b><br>Filial: <b>'+orderInfo.filial+'</b> | CNPJ: '+orderInfo.cnpj+'<br>Endereço: '+orderInfo.endereco+'<br>Gerado: '+new Date().toLocaleString('pt-BR')+'</div><table><thead><tr><th>Código</th><th>Descrição</th><th>Un.</th><th>Qtd.S.</th><th>Qtd.E.</th><th>Vl.Unit.</th><th>Vl.Total</th><th>Situação</th></tr></thead><tbody>'+trs+'</tbody></table></body></html>');
   w.document.close();setTimeout(function(){w.print();},350);toast('🖨 Imprimindo...','ok');
 }
 
 // ════════════════════════════════════════════════════════════
 // PRODUTO MANUAL
 // ════════════════════════════════════════════════════════════
-function addManual(){if(!checkPerm('addManual'))return;
+function addManual(){
   var cod=document.getElementById('m-cod').value.trim(), nom=document.getElementById('m-nom').value.trim();
   var und=document.getElementById('m-und').value.trim(), qty=parseInt(document.getElementById('m-qty').value)||0;
   var vl=document.getElementById('m-vl').value.trim();
@@ -1744,7 +1546,7 @@ function addManual(){if(!checkPerm('addManual'))return;
 // ════════════════════════════════════════════════════════════
 // NOVO / COPIAR
 // ════════════════════════════════════════════════════════════
-function newImport(){if(!checkPerm('newImport'))return;
+function newImport(){
   products=[];orderInfo={};selRow=-1;curF='all';sortFld=null;sortAsc=true;
   document.getElementById('srch').value='';
   hide('p-cortes');hide('p-relatorio');
@@ -1772,7 +1574,7 @@ function switchTab(id){
 document.addEventListener('keydown', function(e){
   var tag=(e.target.tagName||'').toUpperCase();
   var inInput=(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA');
-  if(e.key==='F1'){e.preventDefault();if(checkPerm('import'))fi.click();return;}
+  if(e.key==='F1'){e.preventDefault();fi.click();return;}
   if(e.key==='F2'){e.preventDefault();newImport();return;}
   if(e.key==='F3'){e.preventDefault();markAllSent();return;}
   if(e.key==='F4'){e.preventDefault();showCuts();return;}
@@ -1802,246 +1604,8 @@ document.querySelectorAll('.mov').forEach(function(o){o.addEventListener('click'
 // ════════════════════════════════════════════════════════════
 // INICIALIZAÇÃO
 // ════════════════════════════════════════════════════════════
-// fillFils and updStats called after login
+fillFils();
 updStats();
-
-// ════════════════════════════════════════════════════════════
-// SISTEMA DE USUÁRIOS & SINCRONIZAÇÃO
-// Usuários: TRANSFERENCIA (senha: 574092) — acesso total
-//           GERENTE (senha: 924057) — somente leitura
-// Dados sincronizados via Anthropic Storage API
-// ════════════════════════════════════════════════════════════
-var USERS = {
-  'TRANSFERENCIA': { hash: btoa('574092'), role: 'admin',   label: 'TRANSFERENCIA' },
-  'GERENTE':       { hash: btoa('924057'), role: 'viewer',  label: 'GERENTE'       }
-};
-var SYNC_KEY_PREFIX = 'vsorcamentos_sync_';
-var currentUser = null;
-var syncInterval = null;
-
-// ── SPLASH & LOGIN ─────────────────────────────────────────
-window.addEventListener('load', function() {
-  // Splash dura 2.4s depois some
-  setTimeout(function() {
-    var sp = document.getElementById('splash-screen');
-    if (sp) { sp.style.display = 'none'; }
-    // Mostrar login
-    var lo = document.getElementById('login-overlay');
-    if (lo) lo.style.display = 'flex';
-    setTimeout(function() {
-      var u = document.getElementById('login-user');
-      if (u) u.focus();
-    }, 100);
-  }, 2400);
-});
-
-function loginKey(e) {
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    var u = document.getElementById('login-user');
-    var p = document.getElementById('login-pass');
-    if (e.target === u) p.focus();
-    else doLogin();
-  }
-}
-
-function doLogin() {
-  var uEl = document.getElementById('login-user');
-  var pEl = document.getElementById('login-pass');
-  var errEl = document.getElementById('login-err');
-  var user = (uEl.value || '').trim().toUpperCase();
-  var pass = pEl.value || '';
-  errEl.textContent = '';
-  if (!user || !pass) { errEl.textContent = 'Informe usuário e senha.'; return; }
-  var ud = USERS[user];
-  if (!ud || btoa(pass) !== ud.hash) {
-    errEl.textContent = 'Usuário ou senha inválidos.';
-    pEl.value = ''; pEl.focus(); return;
-  }
-  // Login ok
-  currentUser = { name: user, role: ud.role, label: ud.label };
-  document.getElementById('login-overlay').style.display = 'none';
-  document.getElementById('login-user').value = '';
-  document.getElementById('login-pass').value = '';
-  // Update titlebar/statusbar
-  document.getElementById('tb-op-name').textContent = currentUser.label;
-  document.getElementById('seg-op').textContent = 'Operador : ' + currentUser.label;
-  document.getElementById('seg-user').textContent = currentUser.label;
-  // Show main app window
-  document.getElementById('win').style.display = '';
-  // Apply permissions
-  applyPermissions();
-  // Start sync
-  startSync();
-  fillFils();
-  renderHist();
-  toast('✔ Bem-vindo, ' + currentUser.label + '!', 'ok');
-}
-
-function loginCancel() {
-  // Simply refocus user field
-  document.getElementById('login-err').textContent = 'Faça login para continuar.';
-  document.getElementById('login-user').focus();
-}
-
-// ── PERMISSÕES ─────────────────────────────────────────────
-function applyPermissions() {
-  if (!currentUser) return;
-  var isViewer = (currentUser.role === 'viewer');
-  // Toolbar buttons to disable for viewer
-  var restrictedIds = ['btn-import','btn-upl'];
-  var restrictedOnclicks = [
-    'markAllSent()','quickSt','doSt','updQty','updVlUnit',
-    'resetAll()','newImport()','openM('m-manual')',
-    'saveOrc()','startEdit()','saveEdit()',
-    'addManual()','loadFromHist()','loadDirect',
-    'delDirect','delHistItem()','clearHist()'
-  ];
-  if (isViewer) {
-    // Dim restricted toolbar buttons
-    document.querySelectorAll('.tb-btn').forEach(function(btn) {
-      var oc = btn.getAttribute('onclick') || '';
-      var title = btn.getAttribute('title') || '';
-      // Allow only export/print/view buttons
-      var allowed = /expExcel|expPDF|expAna|toggleRel|showCuts|switchTab|expCust|buildAna/.test(oc + title);
-      // F8-Salvar, F1, F2, F3, S, P, C, F4, F9, Esc — restricted
-      if (!allowed) { btn.style.opacity = '0.35'; btn.title = btn.title + ' [sem permissão]'; }
-    });
-    // Intercept tab buttons (allow all — viewing)
-    // Hide add/edit buttons inside workspace
-    document.querySelectorAll('[onclick*="startEdit"],[onclick*="saveOrc"],[onclick*="openM('m-manual')"]').forEach(function(el){
-      el.style.opacity = '0.35';
-    });
-  }
-}
-
-function checkPerm(action) {
-  if (!currentUser) { showPerm(); return false; }
-  if (currentUser.role === 'viewer') {
-    var allowed = /expExcel|expPDF|expAna|toggleRel|showCuts|buildAna|switchTab|closeM|renderHist|fillFils|viewHist/.test(action);
-    if (!allowed) { showPerm(); return false; }
-  }
-  return true;
-}
-
-function showPerm() {
-  document.getElementById('perm-modal').classList.add('on');
-}
-function closePerm() {
-  document.getElementById('perm-modal').classList.remove('on');
-}
-
-// Patch restricted functions for GERENTE
-var _origMarkAllSent = typeof markAllSent !== 'undefined' ? markAllSent : null;
-var _origResetAll = typeof resetAll !== 'undefined' ? resetAll : null;
-var _origSaveOrc = typeof saveOrc !== 'undefined' ? saveOrc : null;
-var _origNewImport = typeof newImport !== 'undefined' ? newImport : null;
-var _origAddManual = typeof addManual !== 'undefined' ? addManual : null;
-
-function _guardedAction(fn) {
-  if (!currentUser || currentUser.role === 'viewer') { showPerm(); return; }
-  fn();
-}
-
-// ── SINCRONIZAÇÃO ───────────────────────────────────────────
-// Usa Anthropic Storage API (window.storage) para sync cross-device
-var SYNC_VER_KEY = 'vsorcamentos_version';
-var lastSyncTs = 0;
-
-function syncKey() {
-  return SYNC_KEY_PREFIX + (currentUser ? currentUser.name : 'anon');
-}
-
-function setSyncStatus(state, msg) {
-  var dot = document.getElementById('sync-dot');
-  var txt = document.getElementById('sync-txt');
-  if (!dot || !txt) return;
-  dot.className = 'sync-dot ' + state;
-  txt.textContent = msg;
-}
-
-async function pushSync() {
-  if (!currentUser || currentUser.role === 'viewer') return;
-  setSyncStatus('busy', 'Sincronizando...');
-  try {
-    var hist = getHist();
-    var payload = JSON.stringify({ ts: Date.now(), data: hist, user: currentUser.name });
-    await window.storage.set(syncKey(), payload, true);
-    lastSyncTs = Date.now();
-    setSyncStatus('ok', 'Sincronizado ✓');
-  } catch(e) {
-    setSyncStatus('err', 'Erro sync');
-  }
-}
-
-async function pullSync() {
-  if (!currentUser) return;
-  setSyncStatus('busy', 'Atualizando...');
-  try {
-    var result = await window.storage.get(syncKey(), true);
-    if (result && result.value) {
-      var remote = JSON.parse(result.value);
-      if (remote && remote.ts && remote.ts > lastSyncTs) {
-        setHist(remote.data || []);
-        lastSyncTs = remote.ts;
-        fillFils();
-        if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
-        setSyncStatus('ok', 'Atualizado ✓');
-      } else {
-        setSyncStatus('ok', 'Sincronizado ✓');
-      }
-    } else {
-      // Nenhum dado remoto — push local se existir
-      var local = getHist();
-      if (local.length > 0) await pushSync();
-      else setSyncStatus('ok', 'Online ✓');
-    }
-  } catch(e) {
-    // Storage não disponível — usar localStorage apenas
-    setSyncStatus('err', 'Offline');
-  }
-}
-
-function startSync() {
-  pullSync();
-  // Sync a cada 30s
-  if (syncInterval) clearInterval(syncInterval);
-  syncInterval = setInterval(function() { pullSync(); }, 30000);
-}
-
-// Override saveOrc para fazer push após salvar
-var _origSetHist = setHist;
-function setHist(h) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(h)); } catch(e) { toast('Armazenamento cheio!','err'); }
-  // Agendar sync push (debounced)
-  if (currentUser && currentUser.role === 'admin') {
-    clearTimeout(setHist._debounce);
-    setHist._debounce = setTimeout(pushSync, 800);
-  }
-}
-
-// Interceptar botões do toolbar para viewer
-document.addEventListener('click', function(e) {
-  if (!currentUser || currentUser.role !== 'viewer') return;
-  var btn = e.target.closest('.tb-btn, .vbtn, .sb');
-  if (!btn) return;
-  var oc = btn.getAttribute('onclick') || btn.onclick + '' || '';
-  var allowed = /expExcel|expPDF|expAna|toggleRel|showCuts|switchTab|buildAna|closeM|renderHist|viewHist|fillFils/.test(oc);
-  // Also allow close modals
-  if (btn.classList.contains('mclose')) return;
-  if (!allowed && btn.closest('#toolbar, #ws, #pane-hist, #pane-ana')) {
-    e.stopImmediatePropagation();
-    e.preventDefault();
-    showPerm();
-  }
-}, true);
-
-// Bloquear drag-drop file upload para viewer
-document.addEventListener('drop', function(e) {
-  if (currentUser && currentUser.role === 'viewer') {
-    e.preventDefault(); e.stopImmediatePropagation(); showPerm();
-  }
-}, true);
 </script>
 </body>
 </html>
