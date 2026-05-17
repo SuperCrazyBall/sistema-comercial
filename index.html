@@ -1882,26 +1882,59 @@ function parsePDF(pages) {
         }
       }
 
-      // VALORES: pegar todos os números "X,XX" da linha (mais robusto)
-      var allMoneyToks = lt.filter(function(t){ return /^\d[\d.]*,\d{2}$/.test(t.text); });
-      // Filtrar pela posição: preferir os mais à direita (são vlUnit e vlTotal)
-      var moneys;
-      if (xVLU > 0) {
-        var near = allMoneyToks.filter(function(t){ return t.x >= xVLU - TOL * 2; });
-        moneys = near.map(function(t){ return t.text; });
-      }
-      // Fallback: pegar os últimos 2 números com vírgula da linha
-      if (!moneys || moneys.length === 0) {
-        moneys = allMoneyToks.map(function(t){ return t.text; });
-        if (moneys.length > 2) moneys = moneys.slice(-2);
+      // ══ EXTRAÇÃO DE PREÇOS — multi-estratégia robusta ══════════
+      var vlU = '', vlT = '', vlUN = 0, vlTN = 0;
+      var qtdN = parseInt(qtdStr) || 1;
+
+      // Estratégia A: padrão "R$ X,XX" na linha inteira
+      var fullLine = lt.map(function(t){ return t.text; }).join(' ');
+      var rsBruto = fullLine.match(/R\$\s*[\d.]+,\d{2}/g) || [];
+      if (rsBruto.length >= 1) {
+        vlU = rsBruto[0].replace(/R\$\s*/,'').trim();
+        vlT = (rsBruto[1] || '').replace(/R\$\s*/,'').trim();
       }
 
-      var vlU = moneys[0] || '';
-      var vlT = moneys[1] || '';
-      var vlUN = parseMoney(vlU);
-      var vlTN = parseMoney(vlT);
-      // Se só um valor encontrado: pode ser vlUnit, calcular vlTotal
-      if (vlU && !vlT && qtdStr) { vlTN = vlUN * (parseInt(qtdStr)||1); vlT = vlTN.toFixed(2).replace('.',','); }
+      // Estratégia B: tokens "R$" e valor separados
+      if (!vlU) {
+        for (var ti2=0; ti2<lt.length-1; ti2++) {
+          if (lt[ti2].text === 'R$' && /^[\d.,]+$/.test(lt[ti2+1].text)) {
+            if (!vlU) vlU = lt[ti2+1].text;
+            else if (!vlT) { vlT = lt[ti2+1].text; break; }
+          }
+        }
+      }
+
+      // Estratégia C: tokens numéricos com vírgula — 2 mais à direita
+      if (!vlU) {
+        var numToks = lt.filter(function(t){
+          return /^\d[\d.]*,\d{2}$/.test(t.text);
+        }).sort(function(a,b){ return a.x - b.x; });
+        if (xVLU > 0) {
+          var rightToks = numToks.filter(function(t){ return t.x >= xQTD + TOL; });
+          if (rightToks.length >= 1) numToks = rightToks;
+        }
+        if (numToks.length > 2) numToks = numToks.slice(-2);
+        if (numToks.length >= 1) vlU = numToks[0].text;
+        if (numToks.length >= 2) vlT = numToks[1].text;
+      }
+
+      vlUN = parseMoney(vlU);
+      vlTN = parseMoney(vlT);
+
+      // Se valores invertidos, corrige
+      if (vlUN > 0 && vlTN > 0 && vlUN > vlTN && qtdN > 1) {
+        var tmp=vlU; vlU=vlT; vlT=tmp;
+        var tmpN=vlUN; vlUN=vlTN; vlTN=tmpN;
+      }
+      // Calcula o que faltar
+      if (vlUN > 0 && vlTN === 0 && qtdN > 0) {
+        vlTN = Math.round(vlUN * qtdN * 100) / 100;
+        vlT  = vlTN.toFixed(2).replace('.',',');
+      }
+      if (vlTN > 0 && vlUN === 0 && qtdN > 0) {
+        vlUN = Math.round(vlTN / qtdN * 100) / 100;
+        vlU  = vlUN.toFixed(2).replace('.',',');
+      }
 
       produtos.push({
         codigo:codTok.text, nome:nome,
@@ -1952,13 +1985,12 @@ function applyResult(data) {
     var qtdS = p.qtdSolicitada!=null ? p.qtdSolicitada : (p.qtd||0);
     var qtdE = p.qtdEnviada!=null   ? p.qtdEnviada   : qtdS;
     var st   = p.status || 'pending';
-    var vlu  = String(p.vlUnit  || '');
-    var vlt  = String(p.vlTotal || '');
-    var vlUN = p.vlUnitNum  != null ? p.vlUnitNum  : parseMoney(vlu);
-    var vlTN = p.vlTotalNum != null ? p.vlTotalNum : parseMoney(vlt);
-    // Calcular vlTotal se não disponível
-    if (vlUN > 0 && vlTN === 0 && qtdS > 0) { vlTN = vlUN * qtdS; vlt = vlTN.toFixed(2).replace('.',','); }
-    return {id:i,codigo:String(p.codigo||'—'),nome:String(p.nome||'Sem descrição'),
+    var vlu  = String(p.vlUnit  || '').replace(/^R\$\s*/,'').trim();
+    var vlt  = String(p.vlTotal || '').replace(/^R\$\s*/,'').trim();
+    var vlUN = p.vlUnitNum  != null && p.vlUnitNum  > 0 ? p.vlUnitNum  : parseMoney(vlu);
+    var vlTN = p.vlTotalNum != null && p.vlTotalNum > 0 ? p.vlTotalNum : parseMoney(vlt);
+    if (vlUN > 0 && vlTN === 0 && qtdS > 0) { vlTN = Math.round(vlUN*qtdS*100)/100; vlt = vlTN.toFixed(2).replace('.',','); }
+    if (vlTN > 0 && vlUN === 0 && qtdS > 0) { vlUN = Math.round(vlTN/qtdS*100)/100; vlu = vlUN.toFixed(2).replace('.',','); }
       unidade:String(p.unidade||'UND'),qtdSolicitada:qtdS,qtdEnviada:qtdE,
       vlUnit:vlu,vlTotal:vlt,vlUnitNum:vlUN,vlTotalNum:vlTN,status:st};
   });
@@ -1987,6 +2019,10 @@ function updView(){
 function updValSum(){
   var ts=0,te=0,tc=0;
   products.forEach(function(p){
+    if(p.vlUnitNum>0 && p.vlTotalNum===0 && p.qtdSolicitada>0){
+      p.vlTotalNum=Math.round(p.vlUnitNum*p.qtdSolicitada*100)/100;
+      p.vlTotal=p.vlTotalNum.toFixed(2).replace('.',',');
+    }
     ts+=p.vlTotalNum;
     if(p.status==='sent') te+=p.vlTotalNum;
     else if(p.status==='cut'||p.status==='partial'){
