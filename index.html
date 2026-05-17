@@ -1991,6 +1991,7 @@ function applyResult(data) {
     var vlTN = p.vlTotalNum != null && p.vlTotalNum > 0 ? p.vlTotalNum : parseMoney(vlt);
     if (vlUN > 0 && vlTN === 0 && qtdS > 0) { vlTN = Math.round(vlUN*qtdS*100)/100; vlt = vlTN.toFixed(2).replace('.',','); }
     if (vlTN > 0 && vlUN === 0 && qtdS > 0) { vlUN = Math.round(vlTN/qtdS*100)/100; vlu = vlUN.toFixed(2).replace('.',','); }
+    return {id:i,codigo:String(p.codigo||'—'),nome:String(p.nome||'Sem descrição'),
       unidade:String(p.unidade||'UND'),qtdSolicitada:qtdS,qtdEnviada:qtdE,
       vlUnit:vlu,vlTotal:vlt,vlUnitNum:vlUN,vlTotalNum:vlTN,status:st};
   });
