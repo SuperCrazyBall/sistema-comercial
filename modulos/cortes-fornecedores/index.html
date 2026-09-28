@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortes Fornecedores</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link rel="stylesheet" href="cortes-fornecedores.css">
+</head>
+<body>
+  <main id="cortes-app" class="cortes-shell is-hidden">
+    <section class="vs-panel">
+      <div class="vs-panel-hd blue">Cortes Fornecedores</div>
+      <div class="vs-panel-bd">
+        <header class="cortes-head">
+          <div>
+            <h1>Cortes de Fornecedores Diretos</h1>
+            <p class="intro">Importe o Excel de produtos principais do BI e o PDF final da solicitação para encontrar os itens sugeridos que ficaram fora do pedido.</p>
+          </div>
+          <div id="cortes-status" class="status">Aguardando importações</div>
+        </header>
+
+        <section class="kpi-grid" aria-label="Resumo dos cortes">
+          <div class="kpi-box"><span>Itens BI</span><strong id="cf-kpi-excel">0</strong></div>
+          <div class="kpi-box"><span>Sugestões BI</span><strong id="cf-kpi-sug">0</strong></div>
+          <div class="kpi-box"><span>Itens PDF</span><strong id="cf-kpi-pdf">0</strong></div>
+          <div class="kpi-box"><span>Cortes</span><strong id="cf-kpi-cortes">0</strong></div>
+          <div class="kpi-box"><span>Fornecedores</span><strong id="cf-kpi-forn">0</strong></div>
+          <div class="kpi-box"><span>Qtd. cortada</span><strong id="cf-kpi-qtd">0</strong></div>
+        </section>
+
+        <section class="panel-grid" aria-label="Importações">
+          <article class="mini-panel">
+            <div class="mini-hd">1. Importar Excel BI</div>
+            <div class="mini-bd">
+              <div class="file-drop">
+                <strong id="cf-excel-file">Nenhum arquivo selecionado</strong>
+                <span class="muted">Arquivo esperado: .xlsx com CODIGO, DESCRICAO e SUGESTAO.</span>
+                <input id="cf-excel-input" class="vs-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </div>
+              <div id="cf-excel-summary" class="import-summary import-empty">
+                <span id="cf-excel-lines">Linhas lidas: 0</span>
+                <strong id="cf-excel-state">Aguardando Excel do BI.</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="mini-panel">
+            <div class="mini-hd">2. Importar PDF Solicitação</div>
+            <div class="mini-bd">
+              <div class="file-drop">
+                <strong id="cf-pdf-file">Nenhum PDF selecionado</strong>
+                <span class="muted">Arquivo esperado: PDF final da solicitação de transferência.</span>
+                <input id="cf-pdf-input" class="vs-file" type="file" accept=".pdf,application/pdf">
+              </div>
+              <div id="cf-pdf-summary" class="import-summary import-empty">
+                <span id="cf-pdf-lines">Itens lidos: 0</span>
+                <strong id="cf-pdf-state">Aguardando PDF da solicitação.</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="vs-panel actions-panel">
+          <div class="vs-panel-hd">Ações</div>
+          <div class="vs-panel-bd">
+            <div class="actions-row">
+              <button id="cf-btn-analisar" class="vbtn prim" type="button" disabled>Analisar Cortes</button>
+              <button id="cf-btn-imprimir" class="vbtn" type="button" disabled>Imprimir / Salvar PDF</button>
+              <button id="cf-btn-excel" class="vbtn" type="button" disabled>Exportar Excel</button>
+              <button id="cf-btn-limpar" class="vbtn" type="button">Limpar</button>
+              <span id="cf-edit-summary" class="edit-summary">Revise o fornecedor sugerido antes de imprimir.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="vs-panel meta-panel">
+          <div class="vs-panel-hd">Dados Extraídos do PDF</div>
+          <div class="vs-panel-bd">
+            <div class="meta-grid">
+              <div><span>Número</span><strong id="cf-meta-numero">-</strong></div>
+              <div><span>Status</span><strong id="cf-meta-status">-</strong></div>
+              <div><span>Filial destino</span><strong id="cf-meta-filial">-</strong></div>
+              <div><span>Data solicitação</span><strong id="cf-meta-data">-</strong></div>
+              <div><span>Validade</span><strong id="cf-meta-validade">-</strong></div>
+              <div><span>CNPJ</span><strong id="cf-meta-cnpj">-</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="vs-panel results-panel">
+          <div class="vs-panel-hd">Prévia dos Cortes por Fornecedor</div>
+          <div class="vs-panel-bd">
+            <div id="cf-empty" class="empty-state">Importe os dois arquivos e clique em Analisar Cortes.</div>
+            <div id="cf-results" class="supplier-list"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <main id="cortes-denied" class="cortes-shell is-hidden">
+    <section class="vs-panel access-denied">
+      <div class="vs-panel-hd blue">Acesso restrito</div>
+      <div class="vs-panel-bd">
+        <p class="intro">Esta opção está disponível somente para o usuário TRANSFERENCIA.</p>
+        <div class="status status-alert">Entre no sistema principal com o usuário TRANSFERENCIA para usar esta opção.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="cortes-fornecedores.js"></script>
+</body>
+</html>

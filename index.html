@@ -4002,6 +4002,7 @@ tbody tr.row-p {
   <div id="tabsbar">
     <div class="tab-btn active" id="t-import" onclick="switchTab('pane-import')">📋 Pedido de Venda</div>
     <div class="tab-btn" id="t-cruzamento" onclick="switchTab('pane-cruzamento')">⇄ Cruzamento Estoque</div>
+    <div class="tab-btn" id="t-cortes-fornecedores" onclick="switchTab('pane-cortes-fornecedores')">✂ Cortes Fornecedores</div>
     <div class="tab-btn" id="t-hist" onclick="switchTab('pane-hist')">🗂 Histórico</div>
     <div class="tab-btn" id="t-ana" onclick="switchTab('pane-ana')">📈 Relatórios Analíticos</div>
   </div>
@@ -4204,6 +4205,15 @@ tbody tr.row-p {
       <iframe
         title="Cruzamento Estoque/Ruptura"
         src="modulos/cruzamento-transferencia/index.html"
+        style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
+      </iframe>
+    </div>
+
+    <!-- ── ABA: CORTES FORNECEDORES ── -->
+    <div id="pane-cortes-fornecedores" class="pane">
+      <iframe
+        title="Cortes Fornecedores"
+        src="modulos/cortes-fornecedores/index.html"
         style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
       </iframe>
     </div>
@@ -5629,16 +5639,19 @@ function cpCod(c){navigator.clipboard.writeText(c).then(function(){toast('📋 '
 // ════════════════════════════════════════════════════════════
 function switchTab(id){
   // GERENTE não acessa abas operacionais
-  if (CURRENT_USER && CURRENT_USER.role === 'viewer' && (id === 'pane-import' || id === 'pane-cruzamento')) {
+  if (CURRENT_USER && CURRENT_USER.role === 'viewer' && (id === 'pane-import' || id === 'pane-cruzamento' || id === 'pane-cortes-fornecedores')) {
     id = 'pane-hist';
   }
-  if (CURRENT_USER && CURRENT_USER.role === 'compras' && id === 'pane-import') {
+  if (CURRENT_USER && CURRENT_USER.role === 'compras' && (id === 'pane-import' || id === 'pane-cortes-fornecedores')) {
     id = 'pane-cruzamento';
+  }
+  if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA' && id === 'pane-cortes-fornecedores') {
+    id = CURRENT_USER.role === 'compras' ? 'pane-cruzamento' : 'pane-hist';
   }
   document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active');});
   var pane = document.getElementById(id);
   if (pane) pane.classList.add('active');
-  var map={'pane-import':'t-import','pane-cruzamento':'t-cruzamento','pane-hist':'t-hist','pane-ana':'t-ana'};
+  var map={'pane-import':'t-import','pane-cruzamento':'t-cruzamento','pane-cortes-fornecedores':'t-cortes-fornecedores','pane-hist':'t-hist','pane-ana':'t-ana'};
   document.querySelectorAll('.tab-btn').forEach(function(t){t.classList.remove('active');});
   if(map[id]){var tb=document.getElementById(map[id]);if(tb)tb.classList.add('active');}
   if(id==='pane-hist'){fillFils();renderHist();}
@@ -6731,6 +6744,13 @@ function isRestrictedUser() {
 }
 
 function applyPerms() {
+  var tabCortes = document.getElementById('t-cortes-fornecedores');
+  var paneCortes = document.getElementById('pane-cortes-fornecedores');
+  if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA') {
+    if (tabCortes) tabCortes.style.display = 'none';
+    if (paneCortes) paneCortes.style.display = 'none';
+  }
+
   if (!isRestrictedUser()) return;
 
   // Marcar botões restritos na toolbar com classe no-perm
@@ -6747,6 +6767,8 @@ function applyPerms() {
   var paneImport = document.getElementById('pane-import');
   var tabCruzamento = document.getElementById('t-cruzamento');
   var paneCruzamento = document.getElementById('pane-cruzamento');
+  if (tabCortes) tabCortes.style.display = 'none';
+  if (paneCortes) paneCortes.style.display = 'none';
   if (tabImport) tabImport.style.display = 'none';
   if (paneImport) paneImport.style.display = 'none';
   if (CURRENT_USER.role === 'viewer') {
