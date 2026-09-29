@@ -1,5 +1,6 @@
 (function () {
   var MEMORY_KEY = 'cf_supplier_memory_v2';
+  var PRINT_BRIDGE_URL = 'http://127.0.0.1:9127';
 
   var REQUIRED_HEADERS = [
     { key: 'codigo', label: 'CODIGO' },
@@ -60,7 +61,16 @@
     },
     supplierOverrides: {},
     selectedItems: {},
-    memory: loadMemory()
+    memory: loadMemory(),
+    preview: {
+      pages: [],
+      currentPage: 1,
+      zoom: 1,
+      printers: [],
+      bridgeReady: false,
+      defaultPrinter: '',
+      lastSavePath: ''
+    }
   };
 
   function byId(id) {
@@ -1226,173 +1236,354 @@
     return 'RELATORIO DE CORTES DE FORNECEDORES';
   }
 
+  function reportMeta() {
+    return {
+      meta: state.pdf.meta || {},
+      generated: new Date().toLocaleString('pt-BR'),
+      totalQty: state.analysis.cuts.reduce(function (sum, item) {
+        return sum + (Number(item.sugestao) || 0);
+      }, 0)
+    };
+  }
+
+  function flattenReportRows() {
+    var rows = [];
+
+    state.analysis.suppliers.forEach(function (supplier) {
+      rows.push({
+        type: 'supplier',
+        supplier: supplier.supplier,
+        items: supplier.items.length,
+        sugestao: supplier.totalSugestao
+      });
+      supplier.items.forEach(function (item) {
+        rows.push({
+          type: 'item',
+          supplier: supplier.supplier,
+          item: item
+        });
+      });
+    });
+    return rows;
+  }
+
+  function chunkRows(rows, firstLimit, nextLimit) {
+    var pages = [];
+    var index = 0;
+    var limit = firstLimit;
+
+    while (index < rows.length || !pages.length) {
+      pages.push(rows.slice(index, index + limit));
+      index += limit;
+      limit = nextLimit;
+    }
+    return pages;
+  }
+
+  function reportHeaderHtml(info, page, totalPages) {
+    var meta = info.meta || {};
+
+    return '<h1>SOLICITACAO DE TRANSFERENCIA</h1>'
+      + '<h3>RELATORIO DE CORTES DE FORNECEDORES</h3>'
+      + '<div class="rp-meta">'
+      + '<div><strong>Numero:</strong> ' + escapeHtml(meta.numero || '-') + '</div>'
+      + '<div><strong>Status:</strong> ' + escapeHtml(meta.status || '-') + '</div>'
+      + '<div><strong>Filial destino:</strong> ' + escapeHtml(meta.filial || '-') + '</div>'
+      + '<div><strong>CNPJ:</strong> ' + escapeHtml(meta.cnpj || '-') + '</div>'
+      + '<div><strong>Data solicitacao:</strong> ' + escapeHtml(meta.data || '-') + '</div>'
+      + '<div><strong>Gerado em:</strong> ' + escapeHtml(info.generated) + '</div>'
+      + '<div><strong>Validade:</strong> ' + escapeHtml(meta.validade || '-') + '</div>'
+      + '<div><strong>Excel BI:</strong> ' + escapeHtml(state.excel.fileName || '-') + '</div>'
+      + '<div class="rp-filters"><strong>PDF:</strong> ' + escapeHtml(state.pdf.fileName || '-') + ' &nbsp;&nbsp; <strong>Filtros:</strong> Fornecedores diretos cortados</div>'
+      + '</div>'
+      + '<input type="hidden" data-page="' + page + '" data-total="' + totalPages + '">';
+  }
+
+  function reportSummaryHtml(info) {
+    var html = '<div class="rp-boxrow"><div class="rp-box"><h2>RESUMO DE QUANTIDADES</h2><div class="rp-kv">'
+      + '<div><span>Sugestoes BI</span>' + fmtNumber(state.excel.suggestions.length) + '</div>'
+      + '<div><span>Itens PDF</span>' + fmtNumber(state.pdf.items.length) + '</div>'
+      + '<div><span>Cortados</span>' + fmtNumber(state.analysis.cuts.length) + '</div>'
+      + '<div><span>Fornecedores</span>' + fmtNumber(state.analysis.suppliers.length) + '</div>'
+      + '</div></div><div class="rp-box"><h2>RESUMO DE CORTES</h2><div class="rp-kv">'
+      + '<div><span>Qtd. cortada</span>' + fmtQty(info.totalQty) + '</div>'
+      + '<div><span>Critério</span>Ausente no PDF</div>'
+      + '<div><span>Origem</span>Power BI</div>'
+      + '<div><span>Revisão</span>Fornecedor editável</div>'
+      + '</div></div></div>';
+
+    html += '<section class="rp-supplier-index"><h2>FORNECEDORES CORTADOS</h2><ol>';
+    state.analysis.suppliers.forEach(function (supplier) {
+      html += '<li>' + escapeHtml(supplier.supplier) + ' (' + fmtNumber(supplier.items.length) + ')</li>';
+    });
+    html += '</ol></section>';
+    return html;
+  }
+
+  function reportRowsHtml(rows) {
+    var html = '<table class="rp-table"><thead><tr>'
+      + '<th style="width:92px">CODIGO<br>STATUS</th>'
+      + '<th>DESCRICAO</th>'
+      + '<th style="width:58px">CLASSE</th>'
+      + '<th class="rp-num" style="width:76px">ESTOQUE</th>'
+      + '<th class="rp-num" style="width:78px">COBERTURA</th>'
+      + '<th class="rp-num" style="width:78px">SUGESTAO</th>'
+      + '<th class="rp-num" style="width:56px">Nº</th>'
+      + '</tr></thead><tbody>';
+
+    rows.forEach(function (row) {
+      var item;
+
+      if (row.type === 'supplier') {
+        html += '<tr class="rp-supplier-row"><td colspan="7">' + escapeHtml(row.supplier)
+          + ' - ' + fmtNumber(row.items) + ' item(ns) - sugestao ' + fmtQty(row.sugestao) + '</td></tr>';
+        return;
+      }
+      item = row.item;
+      html += '<tr><td class="rp-code">' + escapeHtml(item.codigo) + '<br><span>Cortado</span></td>'
+        + '<td title="' + escapeHtml(item.descricao) + '">' + escapeHtml(item.descricao) + '</td>'
+        + '<td>' + escapeHtml(item.classe || '') + '</td>'
+        + '<td class="rp-num">' + fmtQty(item.estoque) + '</td>'
+        + '<td class="rp-num">' + fmtQty(item.cobertura) + '</td>'
+        + '<td class="rp-num">' + fmtQty(item.sugestao) + '</td>'
+        + '<td class="rp-num">' + escapeHtml(item.numero || '') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function buildReportPages() {
+    var info = reportMeta();
+    var chunks = chunkRows(flattenReportRows(), 12, 20);
+    var total = chunks.length;
+
+    return chunks.map(function (rows, idx) {
+      var page = idx + 1;
+      var html = '<div class="report-page-rail"><section class="report-page" data-report-page="' + page + '">';
+
+      html += reportHeaderHtml(info, page, total);
+      if (page === 1) html += reportSummaryHtml(info);
+      html += reportRowsHtml(rows);
+      html += '<div class="rp-foot"><span>Visual Sistemas</span><span>Pagina ' + page + ' &nbsp;&nbsp;&nbsp;&nbsp; de ' + total + '</span></div>';
+      html += '</section></div>';
+      return html;
+    });
+  }
+
+  function reportCssForBridge() {
+    var selectors = [
+      '.report-page-rail', '.report-page', '.report-page h1', '.report-page h3', '.rp-meta', '.rp-meta strong',
+      '.rp-filters', '.rp-boxrow', '.rp-box', '.rp-box h2', '.rp-supplier-index h2', '.rp-kv', '.rp-kv span',
+      '.rp-supplier-index', '.rp-supplier-index ol', '.rp-supplier-index li', '.rp-table', '.rp-table th',
+      '.rp-table td', '.rp-table tr:nth-child(even) td', '.rp-table .rp-supplier-row td', '.rp-num',
+      '.rp-code', '.rp-foot'
+    ];
+    var css = '';
+
+    Array.prototype.forEach.call(document.styleSheets, function (sheet) {
+      try {
+        Array.prototype.forEach.call(sheet.cssRules || [], function (rule) {
+          if (selectors.some(function (selector) { return rule.cssText.indexOf(selector) >= 0; })) {
+            css += rule.cssText + '\n';
+          }
+        });
+      } catch (err) {
+        // Ignore cross-origin stylesheets.
+      }
+    });
+    return '*{box-sizing:border-box;}body{margin:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;}'
+      + '@page{size:A4 landscape;margin:10mm;}.report-page-rail{break-after:page;}'
+      + css;
+  }
+
+  function reportDocumentHtml(pages) {
+    return '<!doctype html><html><head><meta charset="utf-8"><title>' + reportTitle()
+      + '</title><style>' + reportCssForBridge() + '</style></head><body>'
+      + pages.join('') + '</body></html>';
+  }
+
+  function setBridgeStatus(message, kind) {
+    var el = byId('cf-bridge-status');
+
+    if (!el) return;
+    el.textContent = message;
+    el.classList.toggle('is-ok', kind === 'ok');
+    el.classList.toggle('is-error', kind === 'error');
+  }
+
+  function bridgeFetch(path, payload) {
+    return fetch(PRINT_BRIDGE_URL + path, {
+      method: payload ? 'POST' : 'GET',
+      headers: payload ? { 'Content-Type': 'application/json' } : undefined,
+      body: payload ? JSON.stringify(payload) : undefined
+    }).then(function (response) {
+      return response.json().then(function (data) {
+        if (!response.ok || data.ok === false) throw new Error(data.error || 'Falha na ponte local.');
+        return data;
+      });
+    });
+  }
+
+  function refreshPrinters() {
+    var select = byId('cf-printer-name');
+
+    return bridgeFetch('/printers').then(function (data) {
+      state.preview.bridgeReady = true;
+      state.preview.printers = data.printers || [];
+      state.preview.defaultPrinter = data.defaultPrinter || '';
+      if (select) {
+        select.innerHTML = state.preview.printers.length
+          ? state.preview.printers.map(function (printer) {
+            return '<option value="' + escapeHtml(printer.name) + '">' + escapeHtml(printer.name) + '</option>';
+          }).join('')
+          : '<option value="">Nenhuma impressora encontrada</option>';
+        if (state.preview.defaultPrinter) select.value = state.preview.defaultPrinter;
+      }
+      setBridgeStatus(state.preview.printers.length
+        ? 'Ponte local conectada. Impressoras reais carregadas.'
+        : 'Ponte local conectada, mas nenhuma impressora foi encontrada no Windows.', state.preview.printers.length ? 'ok' : 'error');
+    }).catch(function () {
+      state.preview.bridgeReady = false;
+      if (select) {
+        select.innerHTML = '<option value="">Ponte local não iniciada</option><option>Microsoft Print to PDF</option>';
+      }
+      setBridgeStatus('Ponte local não encontrada. Inicie print-bridge/start-print-bridge.bat para listar impressoras e salvar em caminho escolhido.', 'error');
+    });
+  }
+
+  function setPreviewPage(page) {
+    var total = state.preview.pages.length || 1;
+    var pageInput = byId('cf-pv-page');
+
+    state.preview.currentPage = Math.min(Math.max(Number(page) || 1, 1), total);
+    document.querySelectorAll('[data-report-page]').forEach(function (el) {
+      el.closest('.report-page-rail').classList.toggle('is-current-page', Number(el.getAttribute('data-report-page')) === state.preview.currentPage);
+    });
+    if (pageInput) pageInput.value = state.preview.currentPage;
+    if (byId('cf-print-from')) byId('cf-print-from').value = state.preview.currentPage;
+    if (byId('cf-print-to')) byId('cf-print-to').value = total;
+    if (byId('cf-save-from')) byId('cf-save-from').value = state.preview.currentPage;
+    if (byId('cf-save-to')) byId('cf-save-to').value = total;
+    var current = document.querySelector('[data-report-page="' + state.preview.currentPage + '"]');
+    if (current) current.scrollIntoView({ block: 'start', inline: 'center' });
+  }
+
+  function setPreviewZoom(value) {
+    var pages = byId('cf-preview-pages');
+    var select = byId('cf-pv-zoom');
+
+    state.preview.zoom = Math.min(Math.max(Number(value) || 1, 0.7), 1.25);
+    if (pages) pages.style.transform = 'scale(' + state.preview.zoom + ')';
+    if (select) select.value = String(state.preview.zoom);
+  }
+
+  function openDialog(id) {
+    var dialog = byId(id);
+    if (dialog) dialog.classList.remove('is-hidden');
+  }
+
+  function closeDialogs() {
+    document.querySelectorAll('.cf-dialog-shade').forEach(function (dialog) {
+      dialog.classList.add('is-hidden');
+    });
+  }
+
+  function progress(message) {
+    byId('cf-progress-title').textContent = message;
+    byId('cf-progress-page').textContent = 'Página ' + state.preview.currentPage;
+    openDialog('cf-progress-dialog');
+  }
+
   function printReport() {
-    var win;
-    var html;
-    var meta = state.pdf.meta || {};
-    var generated = new Date().toLocaleString('pt-BR');
-    var totalQty;
-    var estimatedPages;
+    var preview = byId('cf-print-preview');
+    var pagesContainer = byId('cf-preview-pages');
+    var total;
 
     if (!state.analysis.ready) {
       setStatus('Gere a análise antes de imprimir.', 'error');
       return;
     }
 
-    totalQty = state.analysis.cuts.reduce(function (sum, item) {
-      return sum + (Number(item.sugestao) || 0);
-    }, 0);
-    win = window.open('', '_blank');
-    if (!win) {
-      setStatus('O navegador bloqueou a janela de impressão.', 'error');
-      return;
+    state.preview.pages = buildReportPages();
+    total = state.preview.pages.length || 1;
+    if (pagesContainer) pagesContainer.innerHTML = state.preview.pages.join('');
+    byId('cf-pv-total').textContent = total;
+    byId('cf-print-to').value = total;
+    byId('cf-save-to').value = total;
+    byId('cf-save-path').value = 'Cortes_Fornecedores_' + fileDate(new Date()) + '.pdf';
+    if (preview) {
+      preview.classList.remove('is-hidden');
+      preview.setAttribute('aria-hidden', 'false');
     }
-
-    estimatedPages = Math.max(1, Math.ceil((state.analysis.cuts.length + (state.analysis.suppliers.length * 2) + 12) / 12));
-    html = '<!doctype html><html><head><meta charset="utf-8"><title>' + reportTitle() + '</title><style>'
-      + '*{box-sizing:border-box;}html,body{width:100%;min-height:100%;margin:0;}'
-      + 'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#000;background:#ededed;overflow:auto;}'
-      + '.preview-title{height:28px;display:flex;align-items:center;gap:7px;padding:3px 8px;background:#f4f4f4;color:#111;font-size:14px;}'
-      + '.preview-title:before{content:"";width:16px;height:16px;background:#000077;border-radius:4px;box-shadow:5px 0 0 #003399,0 5px 0 #003399,5px 5px 0 #000077;}'
-      + '.preview-toolbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;height:32px;padding:2px 8px;border-top:1px solid #fff;border-bottom:2px solid #777;background:#e9e9e9;box-shadow:0 1px 0 #fff inset;}'
-      + '.preview-toolbar button{min-height:24px;border:0;background:transparent;color:#111;font:13px Arial,Helvetica,sans-serif;text-decoration:underline;cursor:pointer;}'
-      + '.preview-toolbar button:hover{background:#dcdcdc;}.preview-toolbar button[disabled]{color:#999;cursor:not-allowed;}'
-      + '.tool-sep{width:1px;height:24px;background:#9c9c9c;border-left:1px solid #fff;}'
-      + '.tool-icon{min-width:25px;text-align:center;color:#004bc9;font-size:17px;font-weight:bold;text-decoration:none!important;}'
-      + '.page-input{width:44px;height:24px;border:2px inset #aaa;background:#fff;font:14px Arial,Helvetica,sans-serif;}'
-      + '.zoom-select{width:180px;height:25px;border:2px inset #aaa;background:#fff;font:13px Arial,Helvetica,sans-serif;}'
-      + '.preview-stage{min-height:calc(100vh - 60px);padding:8px 0 34px;background:#ededed;}'
-      + '.paper-rail{max-width:1420px;margin:0 auto;border-left:4px solid #858585;border-right:4px solid #858585;}'
-      + '.paper{width:1120px;min-height:790px;margin:0 auto;background:#fff;padding:42px 28px 24px;box-shadow:0 0 0 1px #555;transform-origin:top center;}'
-      + '.report-content{font-size:10px;color:#000;}.report-content h1{font-size:24px;margin:0 0 8px 4px;font-weight:bold;letter-spacing:.2px;}'
-      + '.report-content h3{font-size:12px;margin:0 0 10px 4px;font-weight:bold;}'
-      + '.top{display:grid;grid-template-columns:155px 245px 1fr 260px;gap:8px 42px;margin:0 4px 12px;font-size:12px;line-height:16px;}'
-      + '.top strong{font-weight:bold;}'
-      + '.filters{grid-column:1 / -1;}.boxrow{display:grid;grid-template-columns:1.55fr .9fr;gap:10px;margin:14px 0 10px;}'
-      + '.box{border:1px solid #222;padding:6px 8px;}.box h2{font-size:14px;margin:0 0 8px;}'
-      + '.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}'
-      + '.kv span{display:block;font-weight:bold;}'
-      + '.supplier{page-break-inside:avoid;margin-top:10px;}'
-      + '.supplier h2{font-size:11px;margin:0;padding:5px;background:#d9d9d9;border:1px solid #777;border-bottom:0;}'
-      + 'table{width:100%;border-collapse:collapse;table-layout:fixed;}'
-      + 'th{background:#d9d9d9;font-size:10px;text-align:left;border-bottom:1px solid #777;padding:4px 3px;}'
-      + 'td{border-bottom:1px solid #777;padding:5px 3px;vertical-align:top;font-size:10.5px;}'
-      + 'td.num,th.num{text-align:right;font-family:Courier New,monospace;}'
-      + 'td.code{font-family:Courier New,monospace;color:#000080;}'
-      + '.supplier-index{margin:10px 0;border:1px solid #777;}'
-      + '.supplier-index h2{font-size:12px;margin:0;padding:5px;background:#d9d9d9;border-bottom:1px solid #777;}'
-      + '.supplier-index ol{columns:3;margin:7px 10px 8px 26px;padding:0;font-size:10.5px;}'
-      + '.supplier-index li{break-inside:avoid;margin-bottom:3px;}'
-      + '.foot{display:flex;justify-content:space-between;margin-top:18px;font-weight:bold;font-size:12px;}'
-      + '.modal-shade{display:none;position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.04);align-items:center;justify-content:center;}'
-      + '.modal-shade.is-open{display:flex;}.classic-modal{min-width:470px;border:1px solid #999;background:#efefef;box-shadow:0 14px 36px rgba(0,0,0,.25);font:13px Arial,Helvetica,sans-serif;}'
-      + '.classic-modal.save{min-width:490px;}.modal-hd{height:30px;display:flex;align-items:center;justify-content:space-between;padding:4px 8px;background:#f6f6f6;font-size:14px;}'
-      + '.modal-x{border:0;background:transparent;font-size:20px;line-height:20px;cursor:pointer;}.modal-bd{padding:10px;}'
-      + '.fieldset{border:1px solid #b7b7b7;margin:0 0 8px;padding:10px;}.legend{display:inline-block;margin-top:-18px;background:#efefef;padding:0 4px;color:#333;}'
-      + '.dialog-grid{display:grid;grid-template-columns:92px 1fr 150px;gap:8px;align-items:center;margin-top:6px;}'
-      + '.dialog-grid input,.dialog-grid select{height:24px;border:2px inset #aaa;background:#fff;font:13px Arial,Helvetica,sans-serif;}'
-      + '.dialog-grid button,.modal-actions button{height:28px;min-width:86px;border:2px solid;border-color:#fff #777 #777 #fff;background:#efefef;font:13px Arial,Helvetica,sans-serif;cursor:pointer;}'
-      + '.dialog-two{display:grid;grid-template-columns:1fr 1fr;gap:8px;}.radio-line{display:flex;align-items:center;gap:8px;margin:6px 0;}'
-      + '.small-input{width:54px;height:24px;border:2px inset #aaa;background:#fff;}.modal-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:8px;}'
-      + '.progress{min-width:470px;border:1px solid #bbb;background:#f4f4f4;padding:15px 18px;font:14px Arial,Helvetica,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.18);}'
-      + '.progress-page{margin:10px 0 6px;}.progress-bar{height:20px;border:2px inset #ddd;background:repeating-linear-gradient(90deg,#168de2 0,#168de2 10px,#fff 10px,#fff 13px);}'
-      + '@page{size:A4 landscape;margin:10mm;}'
-      + '@media print{body{margin:0;background:#fff;overflow:visible;}.preview-title,.preview-toolbar,.modal-shade{display:none!important;}.preview-stage{min-height:auto;padding:0;background:#fff;}.paper-rail{border:0;max-width:none;margin:0;}.paper{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none;transform:none!important;}.supplier{page-break-inside:avoid;}tr{page-break-inside:avoid;}.report-content{font-size:10px;}}'
-      + '</style></head><body>';
-    html += '<div class="preview-title">Pré-visualização</div>';
-    html += '<div class="preview-toolbar">'
-      + '<button type="button" id="pv-print">Imprimir</button><button type="button" id="pv-save">Salvar</button><button type="button" disabled>Enviar</button>'
-      + '<span class="tool-sep"></span><span class="tool-icon">▣</span><button class="tool-icon" type="button">↞</button><button class="tool-icon" type="button">←</button>'
-      + '<span>Página</span><input class="page-input" value="1"><span>de ' + estimatedPages + '</span><button class="tool-icon" type="button">→</button><button class="tool-icon" type="button">↠</button>'
-      + '<span class="tool-sep"></span><button class="tool-icon" type="button">⌕</button><button class="tool-icon" type="button">⊕</button>'
-      + '<select id="pv-zoom" class="zoom-select"><option value="1">100%</option><option value=".9">90%</option><option value=".8">80%</option><option value=".7">70%</option><option value=".6">60%</option></select>'
-      + '<span class="tool-sep"></span><button class="tool-icon" type="button">↕</button><button class="tool-icon" type="button">↖</button><button type="button" id="pv-close">Fechar</button></div>';
-    html += '<div class="preview-stage"><div class="paper-rail"><main class="paper"><section class="report-content">';
-    html += '<h1>SOLICITACAO DE TRANSFERENCIA</h1><h3>RELATORIO DE CORTES DE FORNECEDORES</h3>';
-    html += '<div class="top">'
-      + '<div><strong>Numero:</strong> ' + escapeHtml(meta.numero || '-') + '</div>'
-      + '<div><strong>Status:</strong> ' + escapeHtml(meta.status || '-') + '</div>'
-      + '<div><strong>Filial destino:</strong> ' + escapeHtml(meta.filial || '-') + '</div>'
-      + '<div><strong>CNPJ:</strong> ' + escapeHtml(meta.cnpj || '-') + '</div>'
-      + '<div><strong>Data solicitacao:</strong> ' + escapeHtml(meta.data || '-') + '</div>'
-      + '<div><strong>Gerado em:</strong> ' + escapeHtml(generated) + '</div>'
-      + '<div><strong>Validade:</strong> ' + escapeHtml(meta.validade || '-') + '</div>'
-      + '<div><strong>Excel BI:</strong> ' + escapeHtml(state.excel.fileName || '-') + '</div>'
-      + '<div class="filters"><strong>PDF:</strong> ' + escapeHtml(state.pdf.fileName || '-') + ' &nbsp;&nbsp; <strong>Filtros:</strong> Fornecedores diretos cortados</div>'
-      + '</div>';
-    html += '<div class="boxrow"><div class="box"><h2>RESUMO DE QUANTIDADES</h2><div class="kv">'
-      + '<div><span>Sugestoes BI</span>' + fmtNumber(state.excel.suggestions.length) + '</div>'
-      + '<div><span>Itens PDF</span>' + fmtNumber(state.pdf.items.length) + '</div>'
-      + '<div><span>Cortados</span>' + fmtNumber(state.analysis.cuts.length) + '</div>'
-      + '<div><span>Fornecedores</span>' + fmtNumber(state.analysis.suppliers.length) + '</div>'
-      + '</div></div><div class="box"><h2>RESUMO DE CORTES</h2><div class="kv">'
-      + '<div><span>Qtd. cortada</span>' + fmtQty(totalQty) + '</div>'
-      + '<div><span>Critério</span>Ausente no PDF</div>'
-      + '<div><span>Origem</span>Power BI</div>'
-      + '<div><span>Revisão</span>Fornecedor editável</div>'
-      + '</div></div></div>';
-    html += '<section class="supplier-index"><h2>FORNECEDORES CORTADOS</h2><ol>';
-    state.analysis.suppliers.forEach(function (supplier) {
-      html += '<li>' + escapeHtml(supplier.supplier) + ' (' + fmtNumber(supplier.items.length) + ')</li>';
-    });
-    html += '</ol></section>';
-
-    state.analysis.suppliers.forEach(function (supplier) {
-      html += '<section class="supplier"><h2>' + escapeHtml(supplier.supplier)
-        + ' - ' + fmtNumber(supplier.items.length) + ' item(ns) - sugestao ' + fmtQty(supplier.totalSugestao) + '</h2>';
-      html += '<table><thead><tr>'
-        + '<th style="width:90px">CODIGO</th><th>DESCRICAO</th><th style="width:48px">CLASSE</th>'
-        + '<th class="num" style="width:70px">ESTOQUE</th><th class="num" style="width:70px">COBERTURA</th>'
-        + '<th class="num" style="width:70px">SUGESTAO</th><th class="num" style="width:50px">Nº</th>'
-        + '</tr></thead><tbody>';
-      supplier.items.forEach(function (item) {
-        html += '<tr><td class="code">' + escapeHtml(item.codigo) + '</td>'
-          + '<td>' + escapeHtml(item.descricao) + '</td>'
-          + '<td>' + escapeHtml(item.classe || '') + '</td>'
-          + '<td class="num">' + fmtQty(item.estoque) + '</td>'
-          + '<td class="num">' + fmtQty(item.cobertura) + '</td>'
-          + '<td class="num">' + fmtQty(item.sugestao) + '</td>'
-          + '<td class="num">' + escapeHtml(item.numero || '') + '</td></tr>';
-      });
-      html += '</tbody></table></section>';
-    });
-
-    html += '<div class="foot"><span>Visual Sistemas</span><span>Pagina 1 &nbsp;&nbsp;&nbsp;&nbsp; de ' + estimatedPages + '</span></div>';
-    html += '</section></main></div></div>';
-    html += '<div class="modal-shade" id="print-dialog"><section class="classic-modal"><div class="modal-hd"><span>Imprimir</span><button class="modal-x" type="button" data-close>×</button></div><div class="modal-bd">'
-      + '<div class="fieldset"><span class="legend">Impressora</span><div class="dialog-grid"><label>Nome:</label><select><option>Impressora padrão do Windows</option><option>Microsoft Print to PDF</option></select><button type="button">Propriedades</button><label>Usar Filtro:</label><select disabled><option>Padrão</option></select><label><input type="checkbox" disabled> Imprimir em arquivo</label></div></div>'
-      + '<div class="dialog-two"><div class="fieldset"><span class="legend">Intervalo de páginas</span><label class="radio-line"><input type="radio" checked> Tudo</label><label class="radio-line"><input type="radio"> Páginas de <input class="small-input" value="1"> até <input class="small-input" value="' + estimatedPages + '"></label><label class="radio-line"><input type="radio" disabled> Seleção</label></div>'
-      + '<div><div class="fieldset"><span class="legend">Cópias</span><div class="dialog-grid" style="grid-template-columns:130px 1fr"><label>Número de cópias:</label><input value="1"><label>Ímpares/Pares:</label><select><option>Todas</option></select></div></div><div class="fieldset"><span class="legend">Duplex</span><label class="radio-line"><input type="checkbox"> Impressão frente e verso</label></div></div></div>'
-      + '<div class="modal-actions"><button type="button" id="print-ok">OK</button><button type="button" data-close>Cancelar</button></div></div></section></div>';
-    html += '<div class="modal-shade" id="save-dialog"><section class="classic-modal save"><div class="modal-hd"><span>Salvar</span><button class="modal-x" type="button" data-close>×</button></div><div class="modal-bd">'
-      + '<div class="dialog-grid" style="grid-template-columns:100px 1fr 26px"><label>Usar Filtro</label><select><option>Documento PDF</option></select><span></span><label>Nome do arquivo</label><input id="save-file-name" value="Cortes_Fornecedores_' + fileDate(new Date()) + '.pdf"><button type="button">...</button></div>'
-      + '<div class="fieldset" style="margin-top:10px"><span class="legend">Intervalo de páginas</span><label class="radio-line"><input type="radio" checked> Tudo</label><label class="radio-line"><input type="radio"> Páginas de <input class="small-input" value="1"> até <input class="small-input" value="' + estimatedPages + '"></label><label class="radio-line"><input type="radio" disabled> Seleção</label></div>'
-      + '<div class="modal-actions"><button type="button" id="save-ok">Salvar</button><button type="button" data-close>Cancelar</button></div></div></section></div>';
-    html += '<div class="modal-shade" id="progress-dialog"><section class="progress"><div id="progress-title">Imprimindo o relatório...</div><div class="progress-page">Página 1</div><div class="progress-bar"></div><div class="modal-actions"><button type="button" data-close>Cancelar</button></div></section></div>';
-    html += '<script>(function(){var $=function(id){return document.getElementById(id);};function openDialog(id){$(id).classList.add("is-open");}function closeDialogs(){document.querySelectorAll(".modal-shade").forEach(function(el){el.classList.remove("is-open");});}function doPrint(label){closeDialogs();$("progress-title").textContent=label;openDialog("progress-dialog");setTimeout(function(){closeDialogs();window.focus();window.print();},450);}$("pv-print").addEventListener("click",function(){openDialog("print-dialog");});$("pv-save").addEventListener("click",function(){openDialog("save-dialog");});$("pv-close").addEventListener("click",function(){window.close();});$("print-ok").addEventListener("click",function(){doPrint("Imprimindo o relatório...");});$("save-ok").addEventListener("click",function(){var name=$("save-file-name").value||document.title;document.title=name.replace(/\\.pdf$/i,"");doPrint("Salvando o relatório...");});$("pv-zoom").addEventListener("change",function(){document.querySelector(".paper").style.transform="scale("+this.value+")";});document.querySelectorAll("[data-close]").forEach(function(btn){btn.addEventListener("click",closeDialogs);});})();</script>';
-    html += '</body></html>';
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setStatus('Pré-visualização de impressão aberta.', 'ok');
+    setPreviewZoom(1);
+    setPreviewPage(1);
+    refreshPrinters();
+    setStatus('Pré-visualização interna aberta.', 'ok');
   }
 
-  function exportExcel() {
-    var XLSX = getXLSX();
-    var rows = [];
-    var wb;
-    var ws;
-    var fileName;
+  function selectedRange(prefix) {
+    var total = state.preview.pages.length || 1;
+    var range = document.querySelector('input[name="' + prefix + '-range"]:checked');
+    var from = Number(byId(prefix + '-from') && byId(prefix + '-from').value) || 1;
+    var to = Number(byId(prefix + '-to') && byId(prefix + '-to').value) || total;
 
-    if (!state.analysis.ready) {
-      setStatus('Gere a análise antes de exportar.', 'error');
+    if (range && range.value === 'all') return { from: 1, to: total };
+    return {
+      from: Math.min(Math.max(from, 1), total),
+      to: Math.min(Math.max(to, 1), total)
+    };
+  }
+
+  function pagesForRange(range) {
+    return state.preview.pages.slice(range.from - 1, range.to);
+  }
+
+  function fallbackBrowserPrint() {
+    setBridgeStatus('Usando fallback do navegador porque a ponte local não está disponível.', 'error');
+    window.print();
+  }
+
+  function printPreviewReport() {
+    var select = byId('cf-printer-name');
+    var printer = select ? select.value : '';
+    var payload = {
+      html: reportDocumentHtml(pagesForRange(selectedRange('cf-print'))),
+      printer: printer,
+      copies: Number(byId('cf-print-copies').value) || 1,
+      duplex: !!byId('cf-print-duplex').checked,
+      parity: byId('cf-print-parity').value
+    };
+
+    closeDialogs();
+    if (!state.preview.bridgeReady) {
+      fallbackBrowserPrint();
       return;
     }
-    if (!XLSX) {
-      setStatus('Biblioteca XLSX não encontrada para exportar.', 'error');
-      return;
-    }
+    progress('Imprimindo o relatório...');
+    bridgeFetch('/print', payload).then(function (data) {
+      closeDialogs();
+      if (data.warning) setStatus(data.warning, 'error');
+      else setStatus('Relatório enviado para a impressora ' + printer + '.', 'ok');
+    }).catch(function (err) {
+      closeDialogs();
+      setStatus('Não foi possível imprimir pela ponte local: ' + err.message, 'error');
+    });
+  }
+
+  function savePdfToBridge(path) {
+    progress('Salvando o relatório...');
+    return bridgeFetch('/save-pdf', {
+      html: reportDocumentHtml(pagesForRange(selectedRange('cf-save'))),
+      path: path
+    }).then(function (data) {
+      closeDialogs();
+      state.preview.lastSavePath = data.path || path;
+      setStatus('PDF salvo em: ' + state.preview.lastSavePath, 'ok');
+    });
+  }
+
+  function buildExcelRows() {
+    var rows = [];
 
     rows.push(['Relatorio de Cortes Fornecedores']);
     rows.push(['Excel BI', state.excel.fileName || '']);
@@ -1422,8 +1613,117 @@
         ]);
       });
     });
+    return rows;
+  }
 
-    ws = XLSX.utils.aoa_to_sheet(rows);
+  function buildExcelWorkbook() {
+    var XLSX = getXLSX();
+    var wb;
+    var ws;
+
+    if (!XLSX) return null;
+    ws = XLSX.utils.aoa_to_sheet(buildExcelRows());
+    ws['!cols'] = [
+      { wch: 24 }, { wch: 16 }, { wch: 54 }, { wch: 10 }, { wch: 12 },
+      { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }
+    ];
+    wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Cortes');
+    return wb;
+  }
+
+  function saveExcelToBridge(path) {
+    var XLSX = getXLSX();
+    var wb = buildExcelWorkbook();
+    var base64;
+
+    if (!XLSX || !wb) {
+      throw new Error('Biblioteca XLSX não encontrada para salvar Excel.');
+    }
+    base64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+    progress('Salvando a planilha...');
+    return bridgeFetch('/save-file', {
+      path: path,
+      base64: base64
+    }).then(function (data) {
+      closeDialogs();
+      setStatus('Excel salvo em: ' + (data.path || path), 'ok');
+    });
+  }
+
+  function savePreviewReport() {
+    var filter = byId('cf-save-filter').value;
+    var path = (byId('cf-save-path').value || '').trim();
+
+    if (filter === 'default') filter = 'pdf';
+    if (filter === 'xlsx' && !/\.xlsx$/i.test(path)) path += '.xlsx';
+    if (filter === 'pdf' && !/\.pdf$/i.test(path)) path += '.pdf';
+    if (!path) {
+      setStatus('Informe o nome do arquivo ou clique em "...".', 'error');
+      return;
+    }
+    if (!state.preview.bridgeReady) {
+      closeDialogs();
+      if (filter === 'xlsx') exportExcel();
+      else fallbackBrowserPrint();
+      return;
+    }
+    Promise.resolve().then(function () {
+      return filter === 'xlsx' ? saveExcelToBridge(path) : savePdfToBridge(path);
+    }).catch(function (err) {
+      closeDialogs();
+      setStatus('Não foi possível salvar pela ponte local: ' + err.message, 'error');
+    });
+  }
+
+  function browseSavePath() {
+    var filter = byId('cf-save-filter').value || 'pdf';
+    var current = (byId('cf-save-path').value || '').trim();
+
+    if (filter === 'default') filter = 'pdf';
+    if (!state.preview.bridgeReady) {
+      setStatus('Inicie a ponte local para escolher caminho pelo Windows.', 'error');
+      return;
+    }
+    bridgeFetch('/save-dialog', {
+      fileName: current || ('Cortes_Fornecedores_' + fileDate(new Date()) + (filter === 'xlsx' ? '.xlsx' : '.pdf')),
+      filter: filter
+    }).then(function (data) {
+      if (data.path) byId('cf-save-path').value = data.path;
+    }).catch(function (err) {
+      setStatus('Não foi possível abrir o seletor de arquivo: ' + err.message, 'error');
+    });
+  }
+
+  function openPrinterProperties() {
+    var select = byId('cf-printer-name');
+    var printer = select ? select.value : '';
+
+    if (!printer || !state.preview.bridgeReady) {
+      setStatus('Selecione uma impressora real pela ponte local.', 'error');
+      return;
+    }
+    bridgeFetch('/printer-properties', { printer: printer }).catch(function (err) {
+      setStatus('Não foi possível abrir as propriedades da impressora: ' + err.message, 'error');
+    });
+  }
+
+  function exportExcel() {
+    var XLSX = getXLSX();
+    var wb;
+    var ws;
+    var fileName;
+
+    if (!state.analysis.ready) {
+      setStatus('Gere a análise antes de exportar.', 'error');
+      return;
+    }
+    if (!XLSX) {
+      setStatus('Biblioteca XLSX não encontrada para exportar.', 'error');
+      return;
+    }
+
+    ws = XLSX.utils.aoa_to_sheet(buildExcelRows());
     ws['!cols'] = [
       { wch: 24 }, { wch: 16 }, { wch: 54 }, { wch: 10 }, { wch: 12 },
       { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }
@@ -1461,6 +1761,27 @@
     setStatus('Aguardando importações', 'info');
   }
 
+  function closePreview() {
+    var preview = byId('cf-print-preview');
+
+    closeDialogs();
+    if (preview) {
+      preview.classList.add('is-hidden');
+      preview.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function updateSaveExtension() {
+    var filter = byId('cf-save-filter') ? byId('cf-save-filter').value : 'pdf';
+    var input = byId('cf-save-path');
+    var value = input ? input.value : '';
+
+    if (!input || !value) return;
+    if (filter === 'default') filter = 'pdf';
+    value = value.replace(/\.(pdf|xlsx)$/i, '');
+    input.value = value + (filter === 'xlsx' ? '.xlsx' : '.pdf');
+  }
+
   function bindEvents() {
     var excelInput = byId('cf-excel-input');
     var pdfInput = byId('cf-pdf-input');
@@ -1471,6 +1792,8 @@
     var create = byId('cf-btn-create-supplier');
     var apply = byId('cf-btn-apply-selected');
     var newSupplier = byId('cf-new-supplier');
+    var pageInput = byId('cf-pv-page');
+    var zoom = byId('cf-pv-zoom');
 
     if (excelInput) {
       excelInput.addEventListener('change', function () {
@@ -1488,6 +1811,31 @@
     if (clear) clear.addEventListener('click', clearAll);
     if (create) create.addEventListener('click', createSupplier);
     if (apply) apply.addEventListener('click', applySelectedSupplier);
+    if (byId('cf-pv-print')) byId('cf-pv-print').addEventListener('click', function () { openDialog('cf-print-dialog'); });
+    if (byId('cf-pv-save')) byId('cf-pv-save').addEventListener('click', function () { openDialog('cf-save-dialog'); });
+    if (byId('cf-pv-close')) byId('cf-pv-close').addEventListener('click', closePreview);
+    if (byId('cf-pv-first')) byId('cf-pv-first').addEventListener('click', function () { setPreviewPage(1); });
+    if (byId('cf-pv-prev')) byId('cf-pv-prev').addEventListener('click', function () { setPreviewPage(state.preview.currentPage - 1); });
+    if (byId('cf-pv-next')) byId('cf-pv-next').addEventListener('click', function () { setPreviewPage(state.preview.currentPage + 1); });
+    if (byId('cf-pv-last')) byId('cf-pv-last').addEventListener('click', function () { setPreviewPage(state.preview.pages.length || 1); });
+    if (byId('cf-pv-zoom-in')) byId('cf-pv-zoom-in').addEventListener('click', function () { setPreviewZoom(state.preview.zoom + 0.1); });
+    if (byId('cf-pv-zoom-out')) byId('cf-pv-zoom-out').addEventListener('click', function () { setPreviewZoom(state.preview.zoom - 0.1); });
+    if (byId('cf-pv-fit')) byId('cf-pv-fit').addEventListener('click', function () { setPreviewZoom(0.8); });
+    if (pageInput) {
+      pageInput.addEventListener('change', function () { setPreviewPage(pageInput.value); });
+      pageInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') setPreviewPage(pageInput.value);
+      });
+    }
+    if (zoom) zoom.addEventListener('change', function () { setPreviewZoom(zoom.value); });
+    if (byId('cf-print-ok')) byId('cf-print-ok').addEventListener('click', printPreviewReport);
+    if (byId('cf-save-ok')) byId('cf-save-ok').addEventListener('click', savePreviewReport);
+    if (byId('cf-save-browse')) byId('cf-save-browse').addEventListener('click', browseSavePath);
+    if (byId('cf-printer-properties')) byId('cf-printer-properties').addEventListener('click', openPrinterProperties);
+    if (byId('cf-save-filter')) byId('cf-save-filter').addEventListener('change', updateSaveExtension);
+    document.querySelectorAll('[data-dialog-close]').forEach(function (button) {
+      button.addEventListener('click', closeDialogs);
+    });
     if (newSupplier) {
       newSupplier.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
