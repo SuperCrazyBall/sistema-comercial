@@ -1,6 +1,7 @@
 (function () {
   var MEMORY_KEY = 'cf_supplier_memory_v2';
-  var PRINT_BRIDGE_URLS = ['http://127.0.0.1:9127', 'http://localhost:9127'];
+  var MEMORY_SYNC_PATH = '/usuarios/transferencia/cortesFornecedoresMemoria.json';
+  var FIREBASE_FALLBACK_URL = 'https://comercial-norte-default-rtdb.firebaseio.com/';
 
   var REQUIRED_HEADERS = [
     { key: 'codigo', label: 'CODIGO' },
@@ -61,16 +62,16 @@
     },
     supplierOverrides: {},
     selectedItems: {},
+    memorySyncTimer: null,
+    memoryLastSyncTs: 0,
+    remoteMemoryLoaded: false,
     memory: loadMemory(),
     preview: {
       pages: [],
       currentPage: 1,
       zoom: 1,
-      printers: [],
-      bridgeReady: false,
-      bridgeUrl: '',
-      defaultPrinter: '',
-      lastSavePath: ''
+      saveHandle: null,
+      saveFilter: 'pdf'
     }
   };
 
@@ -168,12 +169,122 @@
     };
   }
 
+  function normalizeMemory(memory) {
+    memory = memory || {};
+    return {
+      suppliers: Array.isArray(memory.suppliers) ? memory.suppliers.map(standardSupplier).filter(Boolean) : [],
+      codeRules: memory.codeRules || {},
+      aliasRules: memory.aliasRules || {},
+      tokenRules: memory.tokenRules || {},
+      ignoredWarnings: memory.ignoredWarnings || {}
+    };
+  }
+
+  function mergeMemory(remote, local) {
+    var merged = normalizeMemory(local);
+    var current = normalizeMemory(remote);
+    var suppliers = {};
+
+    merged.suppliers.forEach(function (supplier) { suppliers[supplier] = true; });
+    current.suppliers.forEach(function (supplier) { suppliers[supplier] = true; });
+    merged.suppliers = Object.keys(suppliers).sort();
+    merged.codeRules = Object.assign({}, merged.codeRules, current.codeRules);
+    merged.aliasRules = Object.assign({}, merged.aliasRules, current.aliasRules);
+    merged.tokenRules = Object.assign({}, merged.tokenRules, current.tokenRules);
+    merged.ignoredWarnings = Object.assign({}, merged.ignoredWarnings, current.ignoredWarnings);
+    return merged;
+  }
+
+  function firebaseBaseUrl() {
+    try {
+      if (window.parent && window.parent !== window && window.parent.FIREBASE_URL) {
+        return window.parent.FIREBASE_URL;
+      }
+    } catch (err) {
+      // Ignore parent access issues.
+    }
+    return FIREBASE_FALLBACK_URL;
+  }
+
+  function memorySyncUrl() {
+    return firebaseBaseUrl().replace(/\/+$/, '') + MEMORY_SYNC_PATH;
+  }
+
   function saveMemory() {
     try {
       if (window.localStorage) window.localStorage.setItem(MEMORY_KEY, JSON.stringify(state.memory));
     } catch (err) {
       setStatus('Não foi possível salvar a memória de fornecedores neste navegador.', 'error');
     }
+    scheduleMemorySync();
+  }
+
+  function setMemoryStatus(message, kind) {
+    var el = byId('cf-memory-status');
+
+    if (!el) return;
+    el.textContent = message;
+    el.style.borderColor = kind === 'error' ? '#aa0000' : (kind === 'ok' ? '#1f7a30' : '#c09000');
+    el.style.background = kind === 'error' ? '#ffe0dc' : (kind === 'ok' ? '#dff5dd' : '#fff0a8');
+    el.style.color = kind === 'error' ? '#880000' : (kind === 'ok' ? '#0f5c1d' : '#553300');
+  }
+
+  function pushMemorySync() {
+    var payload;
+
+    if (!state.canAccess) return Promise.resolve();
+    payload = {
+      ts: Date.now(),
+      user: state.currentUser ? state.currentUser.name : 'TRANSFERENCIA',
+      data: normalizeMemory(state.memory)
+    };
+    return fetch(memorySyncUrl(), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      state.memoryLastSyncTs = payload.ts;
+      setMemoryStatus('Memória sincronizada no Firebase. Correções serão usadas em outros computadores.', 'ok');
+    }).catch(function () {
+      setMemoryStatus('Memória salva neste computador. Firebase indisponível no momento.', 'error');
+    });
+  }
+
+  function scheduleMemorySync() {
+    if (state.memorySyncTimer) clearTimeout(state.memorySyncTimer);
+    state.memorySyncTimer = setTimeout(pushMemorySync, 700);
+  }
+
+  function loadRemoteMemory() {
+    if (!state.canAccess) return;
+    setMemoryStatus('Carregando memória de fornecedores do Firebase...', 'busy');
+    fetch(memorySyncUrl()).then(function (resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    }).then(function (remote) {
+      if (remote && remote.data) {
+        state.memory = mergeMemory(remote.data, state.memory);
+        state.memoryLastSyncTs = remote.ts || Date.now();
+        if (window.localStorage) window.localStorage.setItem(MEMORY_KEY, JSON.stringify(state.memory));
+        if (state.analysis.ready) {
+          state.analysis.cuts.forEach(function (item) {
+            var resolved = resolveSupplier(item);
+            item.supplier = resolved.supplier;
+            item.supplierSource = resolved.source;
+          });
+          state.analysis.suppliers = groupSuppliers(state.analysis.cuts);
+        }
+        renderSupplierOptions();
+        renderResults();
+        setMemoryStatus('Memória de fornecedores sincronizada pelo Firebase.', 'ok');
+        pushMemorySync();
+      } else {
+        pushMemorySync();
+      }
+    }).catch(function () {
+      setMemoryStatus('Firebase indisponível. Usando memória local deste computador.', 'error');
+    });
   }
 
   function rememberSupplier(name) {
@@ -306,6 +417,10 @@
 
     if (app) app.classList.toggle('is-hidden', !state.canAccess);
     if (denied) denied.classList.toggle('is-hidden', state.canAccess);
+    if (state.canAccess && !state.remoteMemoryLoaded) {
+      state.remoteMemoryLoaded = true;
+      loadRemoteMemory();
+    }
   }
 
   function watchAccess() {
@@ -1371,7 +1486,7 @@
     });
   }
 
-  function reportCssForBridge() {
+  function reportCssForExport() {
     var selectors = [
       '.report-page-rail', '.report-page', '.report-page h1', '.report-page h3', '.rp-meta', '.rp-meta strong',
       '.rp-filters', '.rp-boxrow', '.rp-box', '.rp-box h2', '.rp-supplier-index h2', '.rp-kv', '.rp-kv span',
@@ -1399,82 +1514,17 @@
 
   function reportDocumentHtml(pages) {
     return '<!doctype html><html><head><meta charset="utf-8"><title>' + reportTitle()
-      + '</title><style>' + reportCssForBridge() + '</style></head><body>'
+      + '</title><style>' + reportCssForExport() + '</style></head><body>'
       + pages.join('') + '</body></html>';
   }
 
-  function setBridgeStatus(message, kind) {
-    var el = byId('cf-bridge-status');
+  function setPreviewStatus(message, kind) {
+    var el = byId('cf-preview-status');
 
     if (!el) return;
     el.textContent = message;
     el.classList.toggle('is-ok', kind === 'ok');
     el.classList.toggle('is-error', kind === 'error');
-  }
-
-  function fetchJson(url, payload) {
-    return fetch(url, {
-      method: payload ? 'POST' : 'GET',
-      headers: payload ? { 'Content-Type': 'application/json' } : undefined,
-      body: payload ? JSON.stringify(payload) : undefined
-    }).then(function (response) {
-      return response.json().then(function (data) {
-        if (!response.ok || data.ok === false) throw new Error(data.error || 'Falha na ponte local.');
-        return data;
-      });
-    });
-  }
-
-  function detectBridge() {
-    if (state.preview.bridgeUrl) {
-      return fetchJson(state.preview.bridgeUrl + '/status').then(function () {
-        return state.preview.bridgeUrl;
-      });
-    }
-    return PRINT_BRIDGE_URLS.reduce(function (chain, url) {
-      return chain.catch(function () {
-        return fetchJson(url + '/status').then(function () {
-          state.preview.bridgeUrl = url;
-          return url;
-        });
-      });
-    }, Promise.reject(new Error('Ponte local não detectada.')));
-  }
-
-  function bridgeFetch(path, payload) {
-    return detectBridge().then(function (url) {
-      return fetchJson(url + path, payload);
-    });
-  }
-
-  function refreshPrinters() {
-    var select = byId('cf-printer-name');
-
-    return detectBridge().then(function () {
-      return bridgeFetch('/printers');
-    }).then(function (data) {
-      state.preview.bridgeReady = true;
-      state.preview.printers = data.printers || [];
-      state.preview.defaultPrinter = data.defaultPrinter || '';
-      if (select) {
-        select.innerHTML = state.preview.printers.length
-          ? state.preview.printers.map(function (printer) {
-            return '<option value="' + escapeHtml(printer.name) + '">' + escapeHtml(printer.name) + '</option>';
-          }).join('')
-          : '<option value="">Nenhuma impressora encontrada</option>';
-        if (state.preview.defaultPrinter) select.value = state.preview.defaultPrinter;
-      }
-      setBridgeStatus(state.preview.printers.length
-        ? 'Ponte local conectada. Impressoras reais carregadas.'
-        : 'Ponte local conectada, mas nenhuma impressora foi encontrada no Windows.', state.preview.printers.length ? 'ok' : 'error');
-    }).catch(function () {
-      state.preview.bridgeReady = false;
-      state.preview.bridgeUrl = '';
-      if (select) {
-        select.innerHTML = '<option value="">Ponte local não iniciada</option><option>Microsoft Print to PDF</option>';
-      }
-      setBridgeStatus('Ponte local não encontrada. Abra INICIAR_SISTEMA_COM_PONTE.bat ou print-bridge/start-print-bridge.bat e mantenha a janela aberta.', 'error');
-    });
   }
 
   function setPreviewPage(page) {
@@ -1543,7 +1593,7 @@
     }
     setPreviewZoom(1);
     setPreviewPage(1);
-    refreshPrinters();
+    setPreviewStatus('Prévia interna pronta. Use Imprimir para escolher impressora ou salvar em PDF pela tela nativa.', 'ok');
     setStatus('Pré-visualização interna aberta.', 'ok');
   }
 
@@ -1552,11 +1602,15 @@
     var range = document.querySelector('input[name="' + prefix + '-range"]:checked');
     var from = Number(byId(prefix + '-from') && byId(prefix + '-from').value) || 1;
     var to = Number(byId(prefix + '-to') && byId(prefix + '-to').value) || total;
+    var safeFrom;
+    var safeTo;
 
     if (range && range.value === 'all') return { from: 1, to: total };
+    safeFrom = Math.min(Math.max(from, 1), total);
+    safeTo = Math.min(Math.max(to, 1), total);
     return {
-      from: Math.min(Math.max(from, 1), total),
-      to: Math.min(Math.max(to, 1), total)
+      from: Math.min(safeFrom, safeTo),
+      to: Math.max(safeFrom, safeTo)
     };
   }
 
@@ -1564,48 +1618,36 @@
     return state.preview.pages.slice(range.from - 1, range.to);
   }
 
-  function fallbackBrowserPrint() {
-    setBridgeStatus('Usando fallback do navegador porque a ponte local não está disponível.', 'error');
+  function clearPrintRange() {
+    document.querySelectorAll('.report-page-rail.is-print-hidden').forEach(function (rail) {
+      rail.classList.remove('is-print-hidden');
+    });
+  }
+
+  function applyPrintRange(range) {
+    clearPrintRange();
+    document.querySelectorAll('[data-report-page]').forEach(function (el) {
+      var page = Number(el.getAttribute('data-report-page')) || 1;
+      var rail = el.closest('.report-page-rail');
+
+      if (rail) rail.classList.toggle('is-print-hidden', page < range.from || page > range.to);
+    });
+  }
+
+  function runNativePrint(range) {
+    applyPrintRange(range);
+    window.addEventListener('afterprint', clearPrintRange, { once: true });
     window.print();
+    setTimeout(clearPrintRange, 60000);
   }
 
   function printPreviewReport() {
-    var select = byId('cf-printer-name');
-    var printer = select ? select.value : '';
-    var payload = {
-      html: reportDocumentHtml(pagesForRange(selectedRange('cf-print'))),
-      printer: printer,
-      copies: Number(byId('cf-print-copies').value) || 1,
-      duplex: !!byId('cf-print-duplex').checked,
-      parity: byId('cf-print-parity').value
-    };
+    var range = selectedRange('cf-print');
 
     closeDialogs();
-    if (!state.preview.bridgeReady) {
-      fallbackBrowserPrint();
-      return;
-    }
-    progress('Imprimindo o relatório...');
-    bridgeFetch('/print', payload).then(function (data) {
-      closeDialogs();
-      if (data.warning) setStatus(data.warning, 'error');
-      else setStatus('Relatório enviado para a impressora ' + printer + '.', 'ok');
-    }).catch(function (err) {
-      closeDialogs();
-      setStatus('Não foi possível imprimir pela ponte local: ' + err.message, 'error');
-    });
-  }
-
-  function savePdfToBridge(path) {
-    progress('Salvando o relatório...');
-    return bridgeFetch('/save-pdf', {
-      html: reportDocumentHtml(pagesForRange(selectedRange('cf-save'))),
-      path: path
-    }).then(function (data) {
-      closeDialogs();
-      state.preview.lastSavePath = data.path || path;
-      setStatus('PDF salvo em: ' + state.preview.lastSavePath, 'ok');
-    });
+    setPreviewStatus('Abrindo impressão nativa. Para PDF, escolha "Salvar como PDF" ou "Microsoft Print to PDF".', 'ok');
+    runNativePrint(range);
+    setStatus('Tela nativa de impressão aberta.', 'ok');
   }
 
   function buildExcelRows() {
@@ -1658,79 +1700,131 @@
     return wb;
   }
 
-  function saveExcelToBridge(path) {
+  function downloadBlob(blob, fileName) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  function saveBlobWithPicker(blob, suggestedName, types) {
+    if (state.preview.saveHandle) {
+      return state.preview.saveHandle.createWritable().then(function (writable) {
+        return writable.write(blob).then(function () {
+          return writable.close();
+        }).then(function () {
+          return { name: state.preview.saveHandle.name || suggestedName };
+        });
+      });
+    }
+    if (!window.showSaveFilePicker) {
+      downloadBlob(blob, suggestedName);
+      return Promise.resolve({ fallback: true, name: suggestedName });
+    }
+    return window.showSaveFilePicker({
+      suggestedName: suggestedName,
+      types: types
+    }).then(function (handle) {
+      state.preview.saveHandle = handle;
+      return handle.createWritable().then(function (writable) {
+        return writable.write(blob).then(function () {
+          return writable.close();
+        }).then(function () {
+          return { name: handle.name || suggestedName };
+        });
+      });
+    });
+  }
+
+  function excelBlob() {
     var XLSX = getXLSX();
     var wb = buildExcelWorkbook();
-    var base64;
+    var data;
 
     if (!XLSX || !wb) {
       throw new Error('Biblioteca XLSX não encontrada para salvar Excel.');
     }
-    base64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-    progress('Salvando a planilha...');
-    return bridgeFetch('/save-file', {
-      path: path,
-      base64: base64
-    }).then(function (data) {
-      closeDialogs();
-      setStatus('Excel salvo em: ' + (data.path || path), 'ok');
+    data = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    return new Blob([data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     });
   }
 
   function savePreviewReport() {
     var filter = byId('cf-save-filter').value;
-    var path = (byId('cf-save-path').value || '').trim();
+    var fileName = (byId('cf-save-path').value || '').trim();
+    var range = selectedRange('cf-save');
+    var blob;
 
     if (filter === 'default') filter = 'pdf';
-    if (filter === 'xlsx' && !/\.xlsx$/i.test(path)) path += '.xlsx';
-    if (filter === 'pdf' && !/\.pdf$/i.test(path)) path += '.pdf';
-    if (!path) {
-      setStatus('Informe o nome do arquivo ou clique em "...".', 'error');
-      return;
+    if (filter === 'xlsx' && !/\.xlsx$/i.test(fileName)) fileName += '.xlsx';
+    if (filter === 'pdf' && !/\.pdf$/i.test(fileName)) fileName += '.pdf';
+    if (!fileName) {
+      fileName = 'Cortes_Fornecedores_' + fileDate(new Date()) + (filter === 'xlsx' ? '.xlsx' : '.pdf');
+      byId('cf-save-path').value = fileName;
     }
-    if (!state.preview.bridgeReady) {
-      closeDialogs();
-      if (filter === 'xlsx') exportExcel();
-      else fallbackBrowserPrint();
+    closeDialogs();
+    if (filter === 'pdf') {
+      setPreviewStatus('Para salvar em PDF, escolha "Salvar como PDF" na tela nativa de impressão.', 'ok');
+      runNativePrint(range);
       return;
     }
     Promise.resolve().then(function () {
-      return filter === 'xlsx' ? saveExcelToBridge(path) : savePdfToBridge(path);
+      blob = excelBlob();
+      return saveBlobWithPicker(blob, fileName, [{
+        description: 'Planilha Excel',
+        accept: {
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
+        }
+      }]);
+    }).then(function (result) {
+      setStatus(result.fallback ? 'Excel baixado pelo navegador: ' + fileName : 'Excel salvo: ' + (result.name || fileName), 'ok');
     }).catch(function (err) {
-      closeDialogs();
-      setStatus('Não foi possível salvar pela ponte local: ' + err.message, 'error');
+      if (err && err.name === 'AbortError') return;
+      setStatus('Não foi possível salvar o arquivo: ' + err.message, 'error');
     });
   }
 
   function browseSavePath() {
     var filter = byId('cf-save-filter').value || 'pdf';
     var current = (byId('cf-save-path').value || '').trim();
+    var suggestedName;
 
     if (filter === 'default') filter = 'pdf';
-    if (!state.preview.bridgeReady) {
-      setStatus('Inicie a ponte local para escolher caminho pelo Windows.', 'error');
+    state.preview.saveFilter = filter;
+    state.preview.saveHandle = null;
+    suggestedName = current || ('Cortes_Fornecedores_' + fileDate(new Date()) + (filter === 'xlsx' ? '.xlsx' : '.pdf'));
+    if (!window.showSaveFilePicker) {
+      byId('cf-save-path').value = suggestedName;
+      setPreviewStatus('Este navegador não permite escolher caminho antes de salvar. O arquivo será baixado na pasta Downloads.', 'error');
       return;
     }
-    bridgeFetch('/save-dialog', {
-      fileName: current || ('Cortes_Fornecedores_' + fileDate(new Date()) + (filter === 'xlsx' ? '.xlsx' : '.pdf')),
-      filter: filter
+    if (filter === 'pdf') {
+      byId('cf-save-path').value = suggestedName;
+      setPreviewStatus('Para PDF, o caminho é escolhido na tela nativa de impressão ao selecionar "Salvar como PDF".', 'ok');
+      return;
+    }
+    window.showSaveFilePicker({
+      suggestedName: suggestedName,
+      types: [{
+        description: 'Planilha Excel',
+        accept: {
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
+        }
+      }]
     }).then(function (data) {
-      if (data.path) byId('cf-save-path').value = data.path;
+      state.preview.saveHandle = data;
+      byId('cf-save-path').value = data.name || suggestedName;
     }).catch(function (err) {
+      if (err && err.name === 'AbortError') return;
       setStatus('Não foi possível abrir o seletor de arquivo: ' + err.message, 'error');
-    });
-  }
-
-  function openPrinterProperties() {
-    var select = byId('cf-printer-name');
-    var printer = select ? select.value : '';
-
-    if (!printer || !state.preview.bridgeReady) {
-      setStatus('Selecione uma impressora real pela ponte local.', 'error');
-      return;
-    }
-    bridgeFetch('/printer-properties', { printer: printer }).catch(function (err) {
-      setStatus('Não foi possível abrir as propriedades da impressora: ' + err.message, 'error');
     });
   }
 
@@ -1802,6 +1896,7 @@
     var input = byId('cf-save-path');
     var value = input ? input.value : '';
 
+    state.preview.saveHandle = null;
     if (!input || !value) return;
     if (filter === 'default') filter = 'pdf';
     value = value.replace(/\.(pdf|xlsx)$/i, '');
@@ -1857,7 +1952,6 @@
     if (byId('cf-print-ok')) byId('cf-print-ok').addEventListener('click', printPreviewReport);
     if (byId('cf-save-ok')) byId('cf-save-ok').addEventListener('click', savePreviewReport);
     if (byId('cf-save-browse')) byId('cf-save-browse').addEventListener('click', browseSavePath);
-    if (byId('cf-printer-properties')) byId('cf-printer-properties').addEventListener('click', openPrinterProperties);
     if (byId('cf-save-filter')) byId('cf-save-filter').addEventListener('change', updateSaveExtension);
     document.querySelectorAll('[data-dialog-close]').forEach(function (button) {
       button.addEventListener('click', closeDialogs);

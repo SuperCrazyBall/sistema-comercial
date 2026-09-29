@@ -155,7 +155,7 @@
       <button id="cf-pv-select" class="cf-tool-icon" type="button" title="Selecionar">↖</button>
       <button id="cf-pv-close" type="button">Fechar</button>
     </div>
-    <div id="cf-bridge-status" class="cf-bridge-status">Verificando ponte local de impressão...</div>
+    <div id="cf-preview-status" class="cf-preview-status">Prévia interna pronta para impressão ou salvamento.</div>
     <div id="cf-preview-stage" class="cf-preview-stage">
       <div id="cf-preview-pages" class="cf-preview-pages"></div>
     </div>
@@ -166,13 +166,8 @@
         <div class="cf-dialog-body">
           <fieldset class="cf-fieldset cf-printer-fieldset">
             <legend>Impressora</legend>
-            <div class="cf-printer-grid">
-              <label>Nome:</label>
-              <select id="cf-printer-name"></select>
-              <button id="cf-printer-properties" type="button">Propriedades</button>
-              <label>Usar Filtro:</label>
-              <select disabled><option>Padrão</option></select>
-              <label class="cf-disabled"><input type="checkbox" disabled> Imprimir em arquivo</label>
+            <div class="cf-native-print-note">
+              A seleção da impressora será feita na tela nativa do navegador/sistema. Para salvar em PDF, escolha a impressora "Salvar como PDF" ou "Microsoft Print to PDF".
             </div>
           </fieldset>
           <div class="cf-dialog-columns">

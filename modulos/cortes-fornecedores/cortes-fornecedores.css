@@ -747,7 +747,7 @@ tbody tr:hover td {
   font: 13px Arial, Helvetica, sans-serif;
 }
 
-.cf-bridge-status {
+.cf-preview-status {
   min-height: 24px;
   padding: 5px 10px;
   border-bottom: 1px solid #b5b5b5;
@@ -756,12 +756,12 @@ tbody tr:hover td {
   font-size: 12px;
 }
 
-.cf-bridge-status.is-ok {
+.cf-preview-status.is-ok {
   background: #ddf4d8;
   color: #064f16;
 }
 
-.cf-bridge-status.is-error {
+.cf-preview-status.is-error {
   background: #ffe0dc;
   color: #880000;
 }
@@ -1031,6 +1031,16 @@ tbody tr:hover td {
   align-items: center;
 }
 
+.cf-native-print-note {
+  min-height: 70px;
+  padding: 8px;
+  border: 2px inset #ddd;
+  background: #fff;
+  color: #111;
+  font-size: 13px;
+  line-height: 18px;
+}
+
 .cf-copy-grid {
   display: grid;
   grid-template-columns: 160px 1fr;
@@ -1174,7 +1184,7 @@ tbody tr:hover td {
 
   .cf-preview-title,
   .cf-preview-toolbar,
-  .cf-bridge-status,
+  .cf-preview-status,
   .cf-dialog-shade {
     display: none !important;
   }
@@ -1194,6 +1204,10 @@ tbody tr:hover td {
     margin: 0;
     border: 0;
     break-after: page;
+  }
+
+  .report-page-rail.is-print-hidden {
+    display: none !important;
   }
 
   .report-page {
