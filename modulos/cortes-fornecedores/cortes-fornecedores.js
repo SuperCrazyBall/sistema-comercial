@@ -1,4 +1,6 @@
 (function () {
+  var MEMORY_KEY = 'cf_supplier_memory_v2';
+
   var REQUIRED_HEADERS = [
     { key: 'codigo', label: 'CODIGO' },
     { key: 'descricao', label: 'DESCRICAO' },
@@ -56,7 +58,9 @@
       cuts: [],
       suppliers: []
     },
-    supplierOverrides: {}
+    supplierOverrides: {},
+    selectedItems: {},
+    memory: loadMemory()
   };
 
   function byId(id) {
@@ -127,6 +131,94 @@
         "'": '&#39;'
       }[ch];
     });
+  }
+
+  function standardSupplier(value) {
+    return normalizeText(value).toUpperCase() || 'FORNECEDOR NAO IDENTIFICADO';
+  }
+
+  function loadMemory() {
+    var raw;
+    var memory;
+
+    try {
+      raw = window.localStorage ? window.localStorage.getItem(MEMORY_KEY) : '';
+      memory = raw ? JSON.parse(raw) : {};
+    } catch (err) {
+      memory = {};
+    }
+
+    return {
+      suppliers: Array.isArray(memory.suppliers) ? memory.suppliers.map(standardSupplier).filter(Boolean) : [],
+      codeRules: memory.codeRules || {},
+      aliasRules: memory.aliasRules || {},
+      tokenRules: memory.tokenRules || {},
+      ignoredWarnings: memory.ignoredWarnings || {}
+    };
+  }
+
+  function saveMemory() {
+    try {
+      if (window.localStorage) window.localStorage.setItem(MEMORY_KEY, JSON.stringify(state.memory));
+    } catch (err) {
+      setStatus('Não foi possível salvar a memória de fornecedores neste navegador.', 'error');
+    }
+  }
+
+  function rememberSupplier(name) {
+    name = standardSupplier(name);
+    if (state.memory.suppliers.indexOf(name) < 0) {
+      state.memory.suppliers.push(name);
+      state.memory.suppliers.sort();
+    }
+    return name;
+  }
+
+  function removeSupplierFromMemory(name) {
+    name = standardSupplier(name);
+    state.memory.suppliers = state.memory.suppliers.filter(function (supplier) {
+      return supplier !== name;
+    });
+    delete state.memory.aliasRules[name];
+    delete state.memory.ignoredWarnings[name];
+  }
+
+  function itemTokenKey(item) {
+    var tokens = supplierTokens(item && item.descricao);
+    var last = tokens[tokens.length - 1] || '';
+    return last && last.length >= 3 ? last : '';
+  }
+
+  function rememberItemSupplier(item, supplier) {
+    var token;
+
+    if (!item) return;
+    supplier = rememberSupplier(supplier);
+    state.memory.codeRules[item.codigo] = supplier;
+    state.memory.codeRules[item.codigoSemZeros] = supplier;
+    if (item.supplierAuto && item.supplierAuto !== supplier) {
+      state.memory.aliasRules[item.supplierAuto] = supplier;
+    }
+    token = itemTokenKey(item);
+    if (token && !STOP_WORDS[token]) {
+      state.memory.tokenRules[token] = supplier;
+    }
+  }
+
+  function resolveSupplier(item) {
+    var token = itemTokenKey(item);
+    var supplier;
+
+    supplier = state.memory.codeRules[item.codigo] || state.memory.codeRules[item.codigoSemZeros];
+    if (supplier) return { supplier: supplier, source: 'memoria-produto' };
+
+    supplier = state.memory.aliasRules[item.supplierAuto];
+    if (supplier) return { supplier: supplier, source: 'memoria-apelido' };
+
+    supplier = token ? state.memory.tokenRules[token] : '';
+    if (supplier) return { supplier: supplier, source: 'memoria-palavra' };
+
+    return { supplier: item.supplierAuto || 'FORNECEDOR NAO IDENTIFICADO', source: 'automatico' };
   }
 
   function setStatus(message, stateName) {
@@ -697,15 +789,18 @@
     cuts = state.excel.suggestions.filter(function (item) {
       return !state.pdf.codes[item.codigo] && !state.pdf.codes[item.codigoSemZeros];
     }).map(function (item) {
-      var override = state.supplierOverrides[item.codigo] || '';
+      var resolved;
       var copy = Object.assign({}, item);
-      copy.supplier = override || item.supplierAuto;
+      resolved = resolveSupplier(copy);
+      copy.supplier = resolved.supplier;
+      copy.supplierSource = resolved.source;
       return copy;
     });
 
     state.analysis.ready = true;
     state.analysis.cuts = cuts;
     state.analysis.suppliers = groupSuppliers(cuts);
+    state.selectedItems = {};
     renderAll();
     setStatus(cuts.length + ' item(ns) cortado(s) encontrados em ' + state.analysis.suppliers.length + ' fornecedor(es).', 'ok');
   }
@@ -715,18 +810,23 @@
     var suppliers;
 
     cuts.forEach(function (item) {
-      var supplier = state.supplierOverrides[item.codigo] || item.supplier || item.supplierAuto || 'FORNECEDOR NAO IDENTIFICADO';
+      var supplier = item.supplier || item.supplierAuto || 'FORNECEDOR NAO IDENTIFICADO';
       if (!map[supplier]) {
         map[supplier] = {
           supplier: supplier,
           items: [],
           totalSugestao: 0,
-          totalEstoque: 0
+          totalEstoque: 0,
+          learned: 0,
+          automatic: 0,
+          warning: null
         };
       }
       map[supplier].items.push(item);
       map[supplier].totalSugestao += Number(item.sugestao) || 0;
       map[supplier].totalEstoque += Number(item.estoque) || 0;
+      if (String(item.supplierSource || '').indexOf('memoria') === 0) map[supplier].learned += 1;
+      else map[supplier].automatic += 1;
     });
 
     suppliers = Object.keys(map).map(function (key) {
@@ -741,23 +841,155 @@
       supplier.items.sort(function (a, b) {
         return String(a.descricao).localeCompare(String(b.descricao));
       });
+      supplier.warning = supplierWarning(supplier);
     });
     return suppliers;
   }
 
   function updateSupplier(oldName, newName) {
-    newName = normalizeText(newName).toUpperCase() || 'FORNECEDOR NAO IDENTIFICADO';
+    oldName = standardSupplier(oldName);
+    newName = rememberSupplier(newName);
     state.analysis.cuts.forEach(function (item) {
-      var current = state.supplierOverrides[item.codigo] || item.supplier || item.supplierAuto;
+      var current = standardSupplier(item.supplier || item.supplierAuto);
       if (current === oldName) {
-        state.supplierOverrides[item.codigo] = newName;
+        rememberItemSupplier(item, newName);
         item.supplier = newName;
+        item.supplierSource = 'memoria-produto';
       }
     });
+    if (oldName !== newName) state.memory.aliasRules[oldName] = newName;
+    saveMemory();
     state.analysis.suppliers = groupSuppliers(state.analysis.cuts);
+    renderSupplierOptions();
     renderResults();
     renderKpis();
     setStatus('Fornecedor revisado: ' + oldName + ' → ' + newName + '.', 'ok');
+  }
+
+  function supplierWarning(supplier) {
+    var name = supplier.supplier;
+    var suspiciousWords = /(^| )(SUCO|PEQ|PEQUENO|GRANDE|MED|MEDIA|BASE|TAMPA|TPA|POTE|SACO|SACOLA|EMB|TRANS|COLOR|BR|PET|MIL|KG|ML|UND|UN)( |$)/;
+
+    if (state.memory.ignoredWarnings[name]) return null;
+    if (name === 'FORNECEDOR NAO IDENTIFICADO') return 'Fornecedor não identificado. Vale revisar estes itens.';
+    if (supplier.learned > 0 && supplier.automatic === 0) return null;
+    if (supplier.items.length <= 2 && name.indexOf(' ') > 0) return 'Nome composto com poucos itens. Pode ser parte da descrição, não fornecedor.';
+    if (suspiciousWords.test(name)) return 'Nome parece conter embalagem, tamanho ou título de produto.';
+    if (supplier.items.length === 1 && supplier.automatic > 0) return 'Fornecedor apareceu uma única vez e ainda não foi confirmado na memória.';
+    return null;
+  }
+
+  function selectedCodes() {
+    return Object.keys(state.selectedItems || {}).filter(function (codigo) {
+      return !!state.selectedItems[codigo];
+    });
+  }
+
+  function findCutByCode(codigo) {
+    return state.analysis.cuts.find(function (item) {
+      return item.codigo === codigo || item.codigoSemZeros === codigo;
+    });
+  }
+
+  function applySupplierToCodes(codes, supplier) {
+    var changed = 0;
+
+    supplier = rememberSupplier(supplier);
+    codes.forEach(function (codigo) {
+      var item = findCutByCode(codigo);
+      if (!item) return;
+      rememberItemSupplier(item, supplier);
+      item.supplier = supplier;
+      item.supplierSource = 'memoria-produto';
+      changed += 1;
+    });
+    saveMemory();
+    state.selectedItems = {};
+    state.analysis.suppliers = groupSuppliers(state.analysis.cuts);
+    renderAll();
+    setStatus(changed + ' item(ns) movido(s) para ' + supplier + '. Vou lembrar disso nas próximas análises.', 'ok');
+  }
+
+  function applySelectedSupplier() {
+    var select = byId('cf-target-supplier');
+    var codes = selectedCodes();
+    var supplier = select ? select.value : '';
+
+    if (!codes.length) {
+      setStatus('Selecione ao menos um item para classificar.', 'error');
+      return;
+    }
+    if (!supplier) {
+      setStatus('Escolha um fornecedor de destino.', 'error');
+      return;
+    }
+    applySupplierToCodes(codes, supplier);
+  }
+
+  function createSupplier() {
+    var input = byId('cf-new-supplier');
+    var name = input ? input.value : '';
+
+    name = standardSupplier(name);
+    if (!name || name === 'FORNECEDOR NAO IDENTIFICADO') {
+      setStatus('Informe um nome de fornecedor válido.', 'error');
+      return;
+    }
+    rememberSupplier(name);
+    saveMemory();
+    if (input) input.value = '';
+    renderSupplierOptions();
+    setStatus('Fornecedor criado na memória: ' + name + '.', 'ok');
+  }
+
+  function deleteSupplierName(name) {
+    var fallback = 'FORNECEDOR NAO IDENTIFICADO';
+    var changed = 0;
+
+    name = standardSupplier(name);
+    if (!window.confirm('Excluir o fornecedor "' + name + '" da prévia e da memória? Os itens voltarão para "Fornecedor não identificado".')) {
+      return;
+    }
+    removeSupplierFromMemory(name);
+    state.analysis.cuts.forEach(function (item) {
+      if (standardSupplier(item.supplier) === name) {
+        item.supplier = fallback;
+        item.supplierSource = 'automatico';
+        state.memory.codeRules[item.codigo] = fallback;
+        state.memory.codeRules[item.codigoSemZeros] = fallback;
+        changed += 1;
+      }
+    });
+    saveMemory();
+    state.analysis.suppliers = groupSuppliers(state.analysis.cuts);
+    renderAll();
+    setStatus('Fornecedor excluído. ' + changed + ' item(ns) voltaram para revisão.', 'ok');
+  }
+
+  function ignoreSupplierWarning(name) {
+    name = standardSupplier(name);
+    state.memory.ignoredWarnings[name] = true;
+    saveMemory();
+    state.analysis.suppliers = groupSuppliers(state.analysis.cuts);
+    renderResults();
+    setStatus('Aviso dispensado para ' + name + '.', 'ok');
+  }
+
+  function renderSupplierOptions() {
+    var select = byId('cf-target-supplier');
+    var names = {};
+    var html = '<option value="">Selecionar fornecedor...</option>';
+
+    state.memory.suppliers.forEach(function (supplier) {
+      names[supplier] = true;
+    });
+    state.analysis.suppliers.forEach(function (supplier) {
+      names[supplier.supplier] = true;
+    });
+    Object.keys(names).sort().forEach(function (supplier) {
+      html += '<option value="' + escapeHtml(supplier) + '">' + escapeHtml(supplier) + '</option>';
+    });
+    if (select) select.innerHTML = html;
   }
 
   function renderKpis() {
@@ -800,6 +1032,7 @@
     setDisabled('cf-btn-analisar', !canAnalyze);
     setDisabled('cf-btn-imprimir', !hasResult);
     setDisabled('cf-btn-excel', !hasResult);
+    setDisabled('cf-btn-apply-selected', !hasResult || selectedCodes().length === 0);
     byId('cf-edit-summary').textContent = hasResult
       ? 'Fornecedores agrupados: ' + state.analysis.suppliers.length + ' | Itens cortados: ' + state.analysis.cuts.length
       : 'Revise o fornecedor sugerido antes de imprimir.';
@@ -825,8 +1058,10 @@
     }
 
     empty.classList.add('is-hidden');
+    html += renderSupplierSummary();
     state.analysis.suppliers.forEach(function (supplier, idx) {
       var supplierEsc = escapeHtml(supplier.supplier);
+      var warning = supplier.warning;
       html += '<article class="supplier-card">';
       html += '<div class="supplier-head">';
       html += '<label class="supplier-name"><span>Fornecedor ' + (idx + 1) + '</span>'
@@ -834,25 +1069,40 @@
       html += '<div class="supplier-stat">Itens<br><strong>' + fmtNumber(supplier.items.length) + '</strong></div>';
       html += '<div class="supplier-stat">Sugestão<br><strong>' + fmtQty(supplier.totalSugestao) + '</strong></div>';
       html += '<div class="supplier-stat">Estoque<br><strong>' + fmtQty(supplier.totalEstoque) + '</strong></div>';
+      html += '<div class="supplier-actions">'
+        + '<button class="vbtn" type="button" data-action="rename-supplier" data-supplier="' + supplierEsc + '">Salvar nome</button>'
+        + '<button class="vbtn" type="button" data-action="delete-supplier" data-supplier="' + supplierEsc + '">Excluir nome</button>'
+        + '</div>';
       html += '</div>';
+      if (warning) {
+        html += '<div class="supplier-warning"><span>Aviso: ' + escapeHtml(warning) + '</span>'
+          + '<button class="vbtn" type="button" data-action="ignore-warning" data-supplier="' + supplierEsc + '">Relaxa, está certo</button></div>';
+      }
       html += '<div class="table-wrap"><table><thead><tr>'
+        + '<th style="width:34px">Sel.</th>'
         + '<th style="width:120px">Código</th>'
         + '<th>Descrição</th>'
         + '<th style="width:70px">Classe</th>'
         + '<th style="width:95px">Estoque</th>'
         + '<th style="width:95px">Cobertura</th>'
         + '<th style="width:95px">Sugestão</th>'
+        + '<th style="width:95px">Origem</th>'
         + '<th style="width:75px">Nº BI</th>'
         + '<th style="width:80px">Linha</th>'
         + '</tr></thead><tbody>';
       supplier.items.forEach(function (item) {
+        var selected = state.selectedItems[item.codigo] ? ' checked' : '';
+        var sourceClass = String(item.supplierSource || '').indexOf('memoria') === 0 ? 'learned-cell' : 'auto-cell';
+        var sourceText = String(item.supplierSource || '').indexOf('memoria') === 0 ? 'Memória' : 'Auto';
         html += '<tr>'
+          + '<td style="text-align:center"><input class="row-check" type="checkbox" data-code="' + escapeHtml(item.codigo) + '"' + selected + '></td>'
           + '<td class="code">' + escapeHtml(item.codigo) + '</td>'
           + '<td title="' + escapeHtml(item.descricao) + '">' + escapeHtml(item.descricao) + '</td>'
           + '<td>' + escapeHtml(item.classe || '') + '</td>'
           + '<td class="num">' + fmtQty(item.estoque) + '</td>'
           + '<td class="num">' + fmtQty(item.cobertura) + '</td>'
           + '<td class="num">' + fmtQty(item.sugestao) + '</td>'
+          + '<td class="' + sourceClass + '">' + sourceText + '</td>'
           + '<td class="num">' + escapeHtml(item.numero || '') + '</td>'
           + '<td class="num">' + escapeHtml(item.rowNumber) + '</td>'
           + '</tr>';
@@ -862,16 +1112,51 @@
     results.innerHTML = html;
 
     results.querySelectorAll('[data-supplier-old]').forEach(function (input) {
-      input.addEventListener('change', function () {
-        updateSupplier(input.getAttribute('data-supplier-old'), input.value);
-      });
       input.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
           event.preventDefault();
-          input.blur();
+          updateSupplier(input.getAttribute('data-supplier-old'), input.value);
         }
       });
     });
+    results.querySelectorAll('.row-check').forEach(function (input) {
+      input.addEventListener('change', function () {
+        if (input.checked) state.selectedItems[input.getAttribute('data-code')] = true;
+        else delete state.selectedItems[input.getAttribute('data-code')];
+        renderActions();
+      });
+    });
+    results.querySelectorAll('[data-action]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var action = button.getAttribute('data-action');
+        var supplier = button.getAttribute('data-supplier');
+        var input;
+
+        if (action === 'rename-supplier') {
+          input = button.closest('.supplier-card').querySelector('[data-supplier-old]');
+          updateSupplier(supplier, input ? input.value : supplier);
+        } else if (action === 'delete-supplier') {
+          deleteSupplierName(supplier);
+        } else if (action === 'ignore-warning') {
+          ignoreSupplierWarning(supplier);
+        }
+      });
+    });
+  }
+
+  function renderSupplierSummary() {
+    var html = '<section class="supplier-summary">'
+      + '<div class="supplier-summary-title">Resumo inicial dos fornecedores cortados</div>'
+      + '<div class="supplier-summary-grid">';
+
+    state.analysis.suppliers.forEach(function (supplier) {
+      html += '<div class="supplier-chip' + (supplier.warning ? ' is-warning' : '') + '">'
+        + '<span>' + escapeHtml(supplier.supplier) + '</span>'
+        + '<strong>' + fmtNumber(supplier.items.length) + '</strong>'
+        + '</div>';
+    });
+    html += '</div></section>';
+    return html;
   }
 
   function renderAll() {
@@ -879,6 +1164,7 @@
     renderMeta();
     renderKpis();
     renderActions();
+    renderSupplierOptions();
     renderResults();
   }
 
@@ -924,6 +1210,10 @@
       + 'td{border-bottom:1px solid #777;padding:4px 3px;vertical-align:top;font-size:9.5px;}'
       + 'td.num,th.num{text-align:right;font-family:Courier New,monospace;}'
       + 'td.code{font-family:Courier New,monospace;color:#000080;}'
+      + '.supplier-index{margin:10px 0;border:1px solid #777;}'
+      + '.supplier-index h2{font-size:12px;margin:0;padding:4px 5px;background:#d9d9d9;border-bottom:1px solid #777;}'
+      + '.supplier-index ol{columns:3;margin:6px 10px 8px 26px;padding:0;font-size:10px;}'
+      + '.supplier-index li{break-inside:avoid;margin-bottom:3px;}'
       + '.foot{display:flex;justify-content:space-between;margin-top:18px;font-weight:bold;font-size:11px;}'
       + '@page{size:A4 landscape;margin:10mm;}'
       + '@media print{body{margin:0;} .supplier{page-break-inside:avoid;} tr{page-break-inside:avoid;}}'
@@ -951,6 +1241,11 @@
       + '<div><span>Origem</span>Power BI</div>'
       + '<div><span>Revisão</span>Fornecedor editável</div>'
       + '</div></div></div>';
+    html += '<section class="supplier-index"><h2>FORNECEDORES CORTADOS</h2><ol>';
+    state.analysis.suppliers.forEach(function (supplier) {
+      html += '<li>' + escapeHtml(supplier.supplier) + ' (' + fmtNumber(supplier.items.length) + ')</li>';
+    });
+    html += '</ol></section>';
 
     state.analysis.suppliers.forEach(function (supplier) {
       html += '<section class="supplier"><h2>' + escapeHtml(supplier.supplier)
@@ -1006,6 +1301,12 @@
     rows.push(['Numero', state.pdf.meta.numero || '']);
     rows.push(['Filial destino', state.pdf.meta.filial || '']);
     rows.push([]);
+    rows.push(['Resumo de Fornecedores']);
+    rows.push(['Fornecedor', 'Itens', 'Sugestão Total']);
+    state.analysis.suppliers.forEach(function (supplier) {
+      rows.push([supplier.supplier, supplier.items.length, supplier.totalSugestao]);
+    });
+    rows.push([]);
     rows.push(['Fornecedor', 'Código', 'Descrição', 'Classe', 'Estoque', 'Cobertura', 'Sugestão', 'Nº BI', 'Linha BI']);
     state.analysis.suppliers.forEach(function (supplier) {
       supplier.items.forEach(function (item) {
@@ -1054,6 +1355,7 @@
     state.analysis.cuts = [];
     state.analysis.suppliers = [];
     state.supplierOverrides = {};
+    state.selectedItems = {};
     if (byId('cf-excel-input')) byId('cf-excel-input').value = '';
     if (byId('cf-pdf-input')) byId('cf-pdf-input').value = '';
     renderAll();
@@ -1067,6 +1369,9 @@
     var print = byId('cf-btn-imprimir');
     var excel = byId('cf-btn-excel');
     var clear = byId('cf-btn-limpar');
+    var create = byId('cf-btn-create-supplier');
+    var apply = byId('cf-btn-apply-selected');
+    var newSupplier = byId('cf-new-supplier');
 
     if (excelInput) {
       excelInput.addEventListener('change', function () {
@@ -1082,6 +1387,16 @@
     if (print) print.addEventListener('click', printReport);
     if (excel) excel.addEventListener('click', exportExcel);
     if (clear) clear.addEventListener('click', clearAll);
+    if (create) create.addEventListener('click', createSupplier);
+    if (apply) apply.addEventListener('click', applySelectedSupplier);
+    if (newSupplier) {
+      newSupplier.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          createSupplier();
+        }
+      });
+    }
   }
 
   bindEvents();

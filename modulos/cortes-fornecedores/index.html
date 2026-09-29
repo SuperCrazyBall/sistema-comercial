@@ -89,6 +89,29 @@
           </div>
         </section>
 
+        <section class="vs-panel memory-panel">
+          <div class="vs-panel-hd">Memória e Revisão de Fornecedores</div>
+          <div class="vs-panel-bd">
+            <div class="memory-grid">
+              <label>
+                Criar fornecedor
+                <span class="inline-actions">
+                  <input id="cf-new-supplier" type="text" placeholder="Ex.: GALVONOTEK">
+                  <button id="cf-btn-create-supplier" class="vbtn" type="button">Criar</button>
+                </span>
+              </label>
+              <label>
+                Enviar itens selecionados para
+                <span class="inline-actions">
+                  <select id="cf-target-supplier"></select>
+                  <button id="cf-btn-apply-selected" class="vbtn prim" type="button" disabled>Aplicar</button>
+                </span>
+              </label>
+              <div id="cf-memory-status" class="memory-status">Correções salvas serão lembradas nas próximas importações neste navegador.</div>
+            </div>
+          </div>
+        </section>
+
         <section class="vs-panel results-panel">
           <div class="vs-panel-hd">Prévia dos Cortes por Fornecedor</div>
           <div class="vs-panel-bd">
