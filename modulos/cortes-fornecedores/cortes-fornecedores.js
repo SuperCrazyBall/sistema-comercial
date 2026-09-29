@@ -926,6 +926,24 @@
     applySupplierToCodes(codes, supplier);
   }
 
+  function applyLocalSelectedSupplier(button) {
+    var card = button ? button.closest('.supplier-card') : null;
+    var input = card ? card.querySelector('.supplier-local-input') : null;
+    var codes = selectedCodes();
+    var supplier = input ? input.value : '';
+
+    if (!codes.length) {
+      setStatus('Selecione ao menos um item para classificar.', 'error');
+      return;
+    }
+    if (!standardSupplier(supplier) || standardSupplier(supplier) === 'FORNECEDOR NAO IDENTIFICADO') {
+      setStatus('Pesquise ou digite um fornecedor de destino.', 'error');
+      if (input) input.focus();
+      return;
+    }
+    applySupplierToCodes(codes, supplier);
+  }
+
   function createSupplier() {
     var input = byId('cf-new-supplier');
     var name = input ? input.value : '';
@@ -975,10 +993,8 @@
     setStatus('Aviso dispensado para ' + name + '.', 'ok');
   }
 
-  function renderSupplierOptions() {
-    var select = byId('cf-target-supplier');
+  function supplierNames() {
     var names = {};
-    var html = '<option value="">Selecionar fornecedor...</option>';
 
     state.memory.suppliers.forEach(function (supplier) {
       names[supplier] = true;
@@ -986,10 +1002,26 @@
     state.analysis.suppliers.forEach(function (supplier) {
       names[supplier.supplier] = true;
     });
-    Object.keys(names).sort().forEach(function (supplier) {
-      html += '<option value="' + escapeHtml(supplier) + '">' + escapeHtml(supplier) + '</option>';
+    return Object.keys(names).sort();
+  }
+
+  function renderSupplierOptions() {
+    var select = byId('cf-target-supplier');
+    var datalist = byId('cf-supplier-options');
+    var selected = select ? select.value : '';
+    var selectHtml = '<option value="">Selecionar fornecedor...</option>';
+    var dataHtml = '';
+    var names = supplierNames();
+
+    names.forEach(function (supplier) {
+      selectHtml += '<option value="' + escapeHtml(supplier) + '">' + escapeHtml(supplier) + '</option>';
+      dataHtml += '<option value="' + escapeHtml(supplier) + '"></option>';
     });
-    if (select) select.innerHTML = html;
+    if (select) {
+      select.innerHTML = selectHtml;
+      if (selected && names.indexOf(selected) >= 0) select.value = selected;
+    }
+    if (datalist) datalist.innerHTML = dataHtml;
   }
 
   function renderKpis() {
@@ -1033,6 +1065,9 @@
     setDisabled('cf-btn-imprimir', !hasResult);
     setDisabled('cf-btn-excel', !hasResult);
     setDisabled('cf-btn-apply-selected', !hasResult || selectedCodes().length === 0);
+    document.querySelectorAll('[data-action="apply-local-selected"]').forEach(function (button) {
+      button.disabled = !hasResult || selectedCodes().length === 0;
+    });
     byId('cf-edit-summary').textContent = hasResult
       ? 'Fornecedores agrupados: ' + state.analysis.suppliers.length + ' | Itens cortados: ' + state.analysis.cuts.length
       : 'Revise o fornecedor sugerido antes de imprimir.';
@@ -1062,6 +1097,7 @@
     state.analysis.suppliers.forEach(function (supplier, idx) {
       var supplierEsc = escapeHtml(supplier.supplier);
       var warning = supplier.warning;
+      var localDisabled = selectedCodes().length ? '' : ' disabled';
       html += '<article class="supplier-card">';
       html += '<div class="supplier-head">';
       html += '<label class="supplier-name"><span>Fornecedor ' + (idx + 1) + '</span>'
@@ -1070,6 +1106,11 @@
       html += '<div class="supplier-stat">Sugestão<br><strong>' + fmtQty(supplier.totalSugestao) + '</strong></div>';
       html += '<div class="supplier-stat">Estoque<br><strong>' + fmtQty(supplier.totalEstoque) + '</strong></div>';
       html += '<div class="supplier-actions">'
+        + '<label class="supplier-local-apply">Mover selecionados para'
+        + '<span class="supplier-local-line">'
+        + '<input class="supplier-local-input" type="text" list="cf-supplier-options" placeholder="Pesquisar fornecedor..." title="Pesquise ou digite o fornecedor correto">'
+        + '<button class="vbtn prim" type="button" data-action="apply-local-selected" data-supplier="' + supplierEsc + '"' + localDisabled + '>Aplicar selecionados aqui</button>'
+        + '</span></label>'
         + '<button class="vbtn" type="button" data-action="rename-supplier" data-supplier="' + supplierEsc + '">Salvar nome</button>'
         + '<button class="vbtn" type="button" data-action="delete-supplier" data-supplier="' + supplierEsc + '">Excluir nome</button>'
         + '</div>';
@@ -1126,6 +1167,17 @@
         renderActions();
       });
     });
+    results.querySelectorAll('.supplier-local-input').forEach(function (input) {
+      input.addEventListener('keydown', function (event) {
+        var button;
+
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          button = input.closest('.supplier-card').querySelector('[data-action="apply-local-selected"]');
+          applyLocalSelectedSupplier(button);
+        }
+      });
+    });
     results.querySelectorAll('[data-action]').forEach(function (button) {
       button.addEventListener('click', function () {
         var action = button.getAttribute('data-action');
@@ -1139,6 +1191,8 @@
           deleteSupplierName(supplier);
         } else if (action === 'ignore-warning') {
           ignoreSupplierWarning(supplier);
+        } else if (action === 'apply-local-selected') {
+          applyLocalSelectedSupplier(button);
         }
       });
     });

@@ -429,10 +429,13 @@ textarea:focus {
 }
 
 .supplier-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(95px, auto)) auto;
+  grid-template-columns: minmax(230px, 1fr) repeat(3, minmax(80px, auto)) minmax(420px, 1.2fr);
   gap: 6px;
-  align-items: center;
+  align-items: end;
   padding: 4px 6px;
   border-bottom: 1px solid #c09000;
   background: linear-gradient(180deg, #fff8df 0%, #ffd45a 100%);
@@ -459,6 +462,7 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
+  align-items: end;
   justify-content: flex-end;
 }
 
@@ -466,6 +470,28 @@ textarea:focus {
   min-height: 21px;
   padding: 1px 6px;
   font-size: 10px;
+}
+
+.supplier-local-apply {
+  display: grid;
+  flex: 1 1 275px;
+  min-width: 260px;
+  gap: 2px;
+  color: #4a3600;
+  font-size: 10px;
+  line-height: 12px;
+}
+
+.supplier-local-line {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto;
+  gap: 3px;
+  align-items: center;
+}
+
+.supplier-local-input {
+  width: 100%;
+  min-width: 0;
 }
 
 .supplier-warning {
@@ -649,5 +675,9 @@ tbody tr:hover td {
 
   .supplier-actions {
     justify-content: flex-start;
+  }
+
+  .supplier-local-line {
+    grid-template-columns: 1fr;
   }
 }
