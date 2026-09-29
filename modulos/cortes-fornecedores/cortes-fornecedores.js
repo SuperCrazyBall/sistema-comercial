@@ -65,6 +65,7 @@
     memorySyncTimer: null,
     memorySyncInterval: null,
     memorySyncBusy: false,
+    memorySyncPending: false,
     memoryLastSyncTs: 0,
     remoteMemoryLoaded: false,
     memory: loadMemory(),
@@ -243,15 +244,6 @@
     return firebaseBaseUrl().replace(/\/+$/, '') + MEMORY_SYNC_PATH;
   }
 
-  function firebaseErrorMessage(prefix, err) {
-    var detail = err && err.message ? err.message : 'falha de conexão';
-    var localHint = window.location.protocol === 'file:'
-      ? ' Esta tela foi aberta como arquivo local; se o navegador bloquear o Firebase, exporte a memória local e importe na versão hospedada.'
-      : '';
-
-    return prefix + detail + '.' + localHint;
-  }
-
   function memoryHasContent(memory) {
     memory = normalizeMemory(memory);
     return memory.suppliers.length > 0
@@ -267,6 +259,7 @@
     } catch (err) {
       setStatus('Não foi possível salvar a memória de fornecedores neste navegador.', 'error');
     }
+    state.memorySyncPending = true;
     scheduleMemorySync();
   }
 
@@ -284,6 +277,7 @@
     var payload;
 
     if (!state.canAccess) return Promise.resolve();
+    setMemoryStatus('Salvando...', 'busy');
     payload = {
       ts: Date.now(),
       user: state.currentUser ? state.currentUser.name : 'TRANSFERENCIA',
@@ -296,9 +290,11 @@
     }).then(function (resp) {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       state.memoryLastSyncTs = payload.ts;
-      setMemoryStatus('Memória sincronizada no Firebase. Correções serão usadas em outros computadores.', 'ok');
-    }).catch(function (err) {
-      setMemoryStatus(firebaseErrorMessage('Memória salva neste computador. Firebase indisponível: ', err), 'error');
+      state.memorySyncPending = false;
+      setMemoryStatus('Sincronizado', 'ok');
+    }).catch(function () {
+      state.memorySyncPending = true;
+      setMemoryStatus('Salvo local', 'ok');
     });
   }
 
@@ -328,7 +324,7 @@
     if (!state.canAccess || state.memorySyncBusy) return Promise.resolve();
     state.memorySyncBusy = true;
     localBefore = normalizeMemory(state.memory);
-    setMemoryStatus('Verificando memória de fornecedores no Firebase...', 'busy');
+    setMemoryStatus('Verificando...', 'busy');
     return fetch(memorySyncUrl() + '?_=' + Date.now()).then(function (resp) {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       return resp.json();
@@ -337,27 +333,34 @@
       var merged;
       var remoteJson;
       var mergedJson;
+      var remoteTs;
 
       if (remote && remote.data) {
         remoteMemory = normalizeMemory(remote.data);
-        if (remote.ts && remote.ts <= state.memoryLastSyncTs) {
-          setMemoryStatus('Memória de fornecedores sincronizada pelo Firebase.', 'ok');
+        remoteTs = remote.ts || 0;
+        if (remoteTs && remoteTs <= state.memoryLastSyncTs) {
+          if (state.memorySyncPending) {
+            return pushMemorySync();
+          } else {
+            setMemoryStatus('Sincronizado', 'ok');
+          }
           return;
         }
         merged = mergeMemory(remoteMemory, localBefore);
         remoteJson = JSON.stringify(remoteMemory);
         mergedJson = JSON.stringify(merged);
-        state.memoryLastSyncTs = remote.ts || Date.now();
+        state.memoryLastSyncTs = remoteTs || Date.now();
         applyRemoteMemory(merged);
-        setMemoryStatus('Memória de fornecedores sincronizada pelo Firebase.', 'ok');
-        if (mergedJson !== remoteJson) scheduleMemorySync();
+        setMemoryStatus('Atualizado', 'ok');
+        if (mergedJson !== remoteJson || state.memorySyncPending) scheduleMemorySync();
       } else if (memoryHasContent(state.memory)) {
-        pushMemorySync();
+        state.memorySyncPending = true;
+        return pushMemorySync();
       } else {
-        setMemoryStatus('Firebase pronto. Ainda não há correções de fornecedores salvas.', 'ok');
+        setMemoryStatus('Sincronizado', 'ok');
       }
-    }).catch(function (err) {
-      setMemoryStatus(firebaseErrorMessage('Firebase indisponível. Usando memória local deste computador. Detalhe: ', err), 'error');
+    }).catch(function () {
+      setMemoryStatus(state.memorySyncPending ? 'Salvo local' : 'Offline', state.memorySyncPending ? 'ok' : 'error');
     }).then(function () {
       state.memorySyncBusy = false;
     });
@@ -367,64 +370,6 @@
     loadRemoteMemory();
     if (state.memorySyncInterval) clearInterval(state.memorySyncInterval);
     state.memorySyncInterval = setInterval(loadRemoteMemory, 20000);
-  }
-
-  function downloadJson(data, fileName) {
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
-  }
-
-  function exportMemoryFile() {
-    var payload = {
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      source: window.location.href,
-      data: normalizeMemory(state.memory)
-    };
-
-    downloadJson(payload, 'cortes-fornecedores-memoria-' + fileDate(new Date()) + '.json');
-    setMemoryStatus('Memória local exportada. Importe este arquivo na versão hospedada para enviar ao Firebase.', 'ok');
-  }
-
-  function importMemoryFile(file) {
-    var reader;
-
-    if (!file) return;
-    reader = new FileReader();
-    reader.onload = function (event) {
-      var parsed;
-      var imported;
-
-      try {
-        parsed = JSON.parse(String(event.target.result || '{}'));
-        imported = normalizeMemory(parsed.data || parsed);
-        state.memory = mergeMemory(imported, state.memory);
-        if (window.localStorage) window.localStorage.setItem(MEMORY_KEY, JSON.stringify(state.memory));
-        if (state.analysis.ready) {
-          applyRemoteMemory(state.memory);
-        } else {
-          renderSupplierOptions();
-        }
-        scheduleMemorySync();
-        setMemoryStatus('Memória importada. Tentando enviar para o Firebase...', 'busy');
-      } catch (err) {
-        setMemoryStatus('Não foi possível importar a memória: ' + err.message, 'error');
-      }
-    };
-    reader.onerror = function () {
-      setMemoryStatus('Não foi possível ler o arquivo de memória.', 'error');
-    };
-    reader.readAsText(file);
   }
 
   function rememberSupplier(name) {
@@ -1762,11 +1707,6 @@
     var create = byId('cf-btn-create-supplier');
     var apply = byId('cf-btn-apply-selected');
     var newSupplier = byId('cf-new-supplier');
-    var memoryExport = byId('cf-btn-memory-export');
-    var memoryImport = byId('cf-btn-memory-import');
-    var memoryImportFile = byId('cf-memory-import-file');
-    var memoryPush = byId('cf-btn-memory-push');
-    var memoryPull = byId('cf-btn-memory-pull');
 
     if (excelInput) {
       excelInput.addEventListener('change', function () {
@@ -1784,23 +1724,6 @@
     if (clear) clear.addEventListener('click', clearAll);
     if (create) create.addEventListener('click', createSupplier);
     if (apply) apply.addEventListener('click', applySelectedSupplier);
-    if (memoryExport) memoryExport.addEventListener('click', exportMemoryFile);
-    if (memoryImport && memoryImportFile) {
-      memoryImport.addEventListener('click', function () {
-        memoryImportFile.value = '';
-        memoryImportFile.click();
-      });
-      memoryImportFile.addEventListener('change', function () {
-        importMemoryFile(memoryImportFile.files && memoryImportFile.files[0]);
-      });
-    }
-    if (memoryPush) {
-      memoryPush.addEventListener('click', function () {
-        setMemoryStatus('Enviando memória local para o Firebase...', 'busy');
-        pushMemorySync();
-      });
-    }
-    if (memoryPull) memoryPull.addEventListener('click', loadRemoteMemory);
     if (newSupplier) {
       newSupplier.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
