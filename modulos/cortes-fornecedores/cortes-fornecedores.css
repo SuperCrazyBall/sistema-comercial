@@ -405,6 +405,20 @@ textarea:focus {
   font-size: 11px;
 }
 
+.memory-tools {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 4px;
+  align-items: center;
+}
+
+.memory-tools .vbtn {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
 .results-panel .vs-panel-bd {
   padding: 0;
 }

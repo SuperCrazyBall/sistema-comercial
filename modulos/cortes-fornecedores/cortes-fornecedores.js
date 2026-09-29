@@ -172,13 +172,44 @@
   }
 
   function normalizeMemory(memory) {
+    function pairsToObject(value) {
+      var out = {};
+
+      if (Array.isArray(value)) {
+        value.forEach(function (entry) {
+          if (!entry) return;
+          out[String(entry.key || '')] = entry.value;
+        });
+        return out;
+      }
+      return value || {};
+    }
+
     memory = memory || {};
     return {
       suppliers: Array.isArray(memory.suppliers) ? memory.suppliers.map(standardSupplier).filter(Boolean) : [],
-      codeRules: memory.codeRules || {},
-      aliasRules: memory.aliasRules || {},
-      tokenRules: memory.tokenRules || {},
-      ignoredWarnings: memory.ignoredWarnings || {}
+      codeRules: pairsToObject(memory.codeRules),
+      aliasRules: pairsToObject(memory.aliasRules),
+      tokenRules: pairsToObject(memory.tokenRules),
+      ignoredWarnings: pairsToObject(memory.ignoredWarnings)
+    };
+  }
+
+  function mapToPairs(map) {
+    map = map || {};
+    return Object.keys(map).map(function (key) {
+      return { key: key, value: map[key] };
+    });
+  }
+
+  function memoryToRemote(memory) {
+    memory = normalizeMemory(memory);
+    return {
+      suppliers: memory.suppliers,
+      codeRules: mapToPairs(memory.codeRules),
+      aliasRules: mapToPairs(memory.aliasRules),
+      tokenRules: mapToPairs(memory.tokenRules),
+      ignoredWarnings: mapToPairs(memory.ignoredWarnings)
     };
   }
 
@@ -210,6 +241,15 @@
 
   function memorySyncUrl() {
     return firebaseBaseUrl().replace(/\/+$/, '') + MEMORY_SYNC_PATH;
+  }
+
+  function firebaseErrorMessage(prefix, err) {
+    var detail = err && err.message ? err.message : 'falha de conexão';
+    var localHint = window.location.protocol === 'file:'
+      ? ' Esta tela foi aberta como arquivo local; se o navegador bloquear o Firebase, exporte a memória local e importe na versão hospedada.'
+      : '';
+
+    return prefix + detail + '.' + localHint;
   }
 
   function memoryHasContent(memory) {
@@ -247,7 +287,7 @@
     payload = {
       ts: Date.now(),
       user: state.currentUser ? state.currentUser.name : 'TRANSFERENCIA',
-      data: normalizeMemory(state.memory)
+      data: memoryToRemote(state.memory)
     };
     return fetch(memorySyncUrl(), {
       method: 'PUT',
@@ -258,7 +298,7 @@
       state.memoryLastSyncTs = payload.ts;
       setMemoryStatus('Memória sincronizada no Firebase. Correções serão usadas em outros computadores.', 'ok');
     }).catch(function (err) {
-      setMemoryStatus('Memória salva neste computador. Firebase indisponível: ' + (err && err.message ? err.message : 'falha de conexão') + '.', 'error');
+      setMemoryStatus(firebaseErrorMessage('Memória salva neste computador. Firebase indisponível: ', err), 'error');
     });
   }
 
@@ -317,7 +357,7 @@
         setMemoryStatus('Firebase pronto. Ainda não há correções de fornecedores salvas.', 'ok');
       }
     }).catch(function (err) {
-      setMemoryStatus('Firebase indisponível. Usando memória local deste computador. Detalhe: ' + (err && err.message ? err.message : 'falha de conexão') + '.', 'error');
+      setMemoryStatus(firebaseErrorMessage('Firebase indisponível. Usando memória local deste computador. Detalhe: ', err), 'error');
     }).then(function () {
       state.memorySyncBusy = false;
     });
@@ -327,6 +367,64 @@
     loadRemoteMemory();
     if (state.memorySyncInterval) clearInterval(state.memorySyncInterval);
     state.memorySyncInterval = setInterval(loadRemoteMemory, 20000);
+  }
+
+  function downloadJson(data, fileName) {
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  function exportMemoryFile() {
+    var payload = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      source: window.location.href,
+      data: normalizeMemory(state.memory)
+    };
+
+    downloadJson(payload, 'cortes-fornecedores-memoria-' + fileDate(new Date()) + '.json');
+    setMemoryStatus('Memória local exportada. Importe este arquivo na versão hospedada para enviar ao Firebase.', 'ok');
+  }
+
+  function importMemoryFile(file) {
+    var reader;
+
+    if (!file) return;
+    reader = new FileReader();
+    reader.onload = function (event) {
+      var parsed;
+      var imported;
+
+      try {
+        parsed = JSON.parse(String(event.target.result || '{}'));
+        imported = normalizeMemory(parsed.data || parsed);
+        state.memory = mergeMemory(imported, state.memory);
+        if (window.localStorage) window.localStorage.setItem(MEMORY_KEY, JSON.stringify(state.memory));
+        if (state.analysis.ready) {
+          applyRemoteMemory(state.memory);
+        } else {
+          renderSupplierOptions();
+        }
+        scheduleMemorySync();
+        setMemoryStatus('Memória importada. Tentando enviar para o Firebase...', 'busy');
+      } catch (err) {
+        setMemoryStatus('Não foi possível importar a memória: ' + err.message, 'error');
+      }
+    };
+    reader.onerror = function () {
+      setMemoryStatus('Não foi possível ler o arquivo de memória.', 'error');
+    };
+    reader.readAsText(file);
   }
 
   function rememberSupplier(name) {
@@ -1664,6 +1762,11 @@
     var create = byId('cf-btn-create-supplier');
     var apply = byId('cf-btn-apply-selected');
     var newSupplier = byId('cf-new-supplier');
+    var memoryExport = byId('cf-btn-memory-export');
+    var memoryImport = byId('cf-btn-memory-import');
+    var memoryImportFile = byId('cf-memory-import-file');
+    var memoryPush = byId('cf-btn-memory-push');
+    var memoryPull = byId('cf-btn-memory-pull');
 
     if (excelInput) {
       excelInput.addEventListener('change', function () {
@@ -1681,6 +1784,23 @@
     if (clear) clear.addEventListener('click', clearAll);
     if (create) create.addEventListener('click', createSupplier);
     if (apply) apply.addEventListener('click', applySelectedSupplier);
+    if (memoryExport) memoryExport.addEventListener('click', exportMemoryFile);
+    if (memoryImport && memoryImportFile) {
+      memoryImport.addEventListener('click', function () {
+        memoryImportFile.value = '';
+        memoryImportFile.click();
+      });
+      memoryImportFile.addEventListener('change', function () {
+        importMemoryFile(memoryImportFile.files && memoryImportFile.files[0]);
+      });
+    }
+    if (memoryPush) {
+      memoryPush.addEventListener('click', function () {
+        setMemoryStatus('Enviando memória local para o Firebase...', 'busy');
+        pushMemorySync();
+      });
+    }
+    if (memoryPull) memoryPull.addEventListener('click', loadRemoteMemory);
     if (newSupplier) {
       newSupplier.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
