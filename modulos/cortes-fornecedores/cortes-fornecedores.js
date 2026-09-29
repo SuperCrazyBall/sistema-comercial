@@ -1232,6 +1232,7 @@
     var meta = state.pdf.meta || {};
     var generated = new Date().toLocaleString('pt-BR');
     var totalQty;
+    var estimatedPages;
 
     if (!state.analysis.ready) {
       setStatus('Gere a análise antes de imprimir.', 'error');
@@ -1247,42 +1248,77 @@
       return;
     }
 
+    estimatedPages = Math.max(1, Math.ceil((state.analysis.cuts.length + (state.analysis.suppliers.length * 2) + 12) / 12));
     html = '<!doctype html><html><head><meta charset="utf-8"><title>' + reportTitle() + '</title><style>'
-      + 'body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;margin:18px 22px;}'
-      + 'h1{font-size:22px;margin:0 0 10px;font-weight:bold;}'
-      + '.top{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 16px;margin-bottom:12px;font-size:11px;}'
+      + '*{box-sizing:border-box;}html,body{width:100%;min-height:100%;margin:0;}'
+      + 'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#000;background:#ededed;overflow:auto;}'
+      + '.preview-title{height:28px;display:flex;align-items:center;gap:7px;padding:3px 8px;background:#f4f4f4;color:#111;font-size:14px;}'
+      + '.preview-title:before{content:"";width:16px;height:16px;background:#000077;border-radius:4px;box-shadow:5px 0 0 #003399,0 5px 0 #003399,5px 5px 0 #000077;}'
+      + '.preview-toolbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;height:32px;padding:2px 8px;border-top:1px solid #fff;border-bottom:2px solid #777;background:#e9e9e9;box-shadow:0 1px 0 #fff inset;}'
+      + '.preview-toolbar button{min-height:24px;border:0;background:transparent;color:#111;font:13px Arial,Helvetica,sans-serif;text-decoration:underline;cursor:pointer;}'
+      + '.preview-toolbar button:hover{background:#dcdcdc;}.preview-toolbar button[disabled]{color:#999;cursor:not-allowed;}'
+      + '.tool-sep{width:1px;height:24px;background:#9c9c9c;border-left:1px solid #fff;}'
+      + '.tool-icon{min-width:25px;text-align:center;color:#004bc9;font-size:17px;font-weight:bold;text-decoration:none!important;}'
+      + '.page-input{width:44px;height:24px;border:2px inset #aaa;background:#fff;font:14px Arial,Helvetica,sans-serif;}'
+      + '.zoom-select{width:180px;height:25px;border:2px inset #aaa;background:#fff;font:13px Arial,Helvetica,sans-serif;}'
+      + '.preview-stage{min-height:calc(100vh - 60px);padding:8px 0 34px;background:#ededed;}'
+      + '.paper-rail{max-width:1420px;margin:0 auto;border-left:4px solid #858585;border-right:4px solid #858585;}'
+      + '.paper{width:1120px;min-height:790px;margin:0 auto;background:#fff;padding:42px 28px 24px;box-shadow:0 0 0 1px #555;transform-origin:top center;}'
+      + '.report-content{font-size:10px;color:#000;}.report-content h1{font-size:24px;margin:0 0 8px 4px;font-weight:bold;letter-spacing:.2px;}'
+      + '.report-content h3{font-size:12px;margin:0 0 10px 4px;font-weight:bold;}'
+      + '.top{display:grid;grid-template-columns:155px 245px 1fr 260px;gap:8px 42px;margin:0 4px 12px;font-size:12px;line-height:16px;}'
       + '.top strong{font-weight:bold;}'
-      + '.boxrow{display:grid;grid-template-columns:1.1fr 1fr;gap:10px;margin:10px 0;}'
-      + '.box{border:1px solid #222;padding:6px 8px;}'
-      + '.box h2{font-size:12px;margin:0 0 7px;}'
-      + '.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}'
+      + '.filters{grid-column:1 / -1;}.boxrow{display:grid;grid-template-columns:1.55fr .9fr;gap:10px;margin:14px 0 10px;}'
+      + '.box{border:1px solid #222;padding:6px 8px;}.box h2{font-size:14px;margin:0 0 8px;}'
+      + '.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}'
       + '.kv span{display:block;font-weight:bold;}'
       + '.supplier{page-break-inside:avoid;margin-top:10px;}'
-      + '.supplier h2{font-size:13px;margin:0;padding:4px 5px;background:#d9d9d9;border:1px solid #777;border-bottom:0;}'
+      + '.supplier h2{font-size:11px;margin:0;padding:5px;background:#d9d9d9;border:1px solid #777;border-bottom:0;}'
       + 'table{width:100%;border-collapse:collapse;table-layout:fixed;}'
-      + 'th{background:#d9d9d9;font-size:9px;text-align:left;border-bottom:1px solid #777;padding:4px 3px;}'
-      + 'td{border-bottom:1px solid #777;padding:4px 3px;vertical-align:top;font-size:9.5px;}'
+      + 'th{background:#d9d9d9;font-size:10px;text-align:left;border-bottom:1px solid #777;padding:4px 3px;}'
+      + 'td{border-bottom:1px solid #777;padding:5px 3px;vertical-align:top;font-size:10.5px;}'
       + 'td.num,th.num{text-align:right;font-family:Courier New,monospace;}'
       + 'td.code{font-family:Courier New,monospace;color:#000080;}'
       + '.supplier-index{margin:10px 0;border:1px solid #777;}'
-      + '.supplier-index h2{font-size:12px;margin:0;padding:4px 5px;background:#d9d9d9;border-bottom:1px solid #777;}'
-      + '.supplier-index ol{columns:3;margin:6px 10px 8px 26px;padding:0;font-size:10px;}'
+      + '.supplier-index h2{font-size:12px;margin:0;padding:5px;background:#d9d9d9;border-bottom:1px solid #777;}'
+      + '.supplier-index ol{columns:3;margin:7px 10px 8px 26px;padding:0;font-size:10.5px;}'
       + '.supplier-index li{break-inside:avoid;margin-bottom:3px;}'
-      + '.foot{display:flex;justify-content:space-between;margin-top:18px;font-weight:bold;font-size:11px;}'
+      + '.foot{display:flex;justify-content:space-between;margin-top:18px;font-weight:bold;font-size:12px;}'
+      + '.modal-shade{display:none;position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.04);align-items:center;justify-content:center;}'
+      + '.modal-shade.is-open{display:flex;}.classic-modal{min-width:470px;border:1px solid #999;background:#efefef;box-shadow:0 14px 36px rgba(0,0,0,.25);font:13px Arial,Helvetica,sans-serif;}'
+      + '.classic-modal.save{min-width:490px;}.modal-hd{height:30px;display:flex;align-items:center;justify-content:space-between;padding:4px 8px;background:#f6f6f6;font-size:14px;}'
+      + '.modal-x{border:0;background:transparent;font-size:20px;line-height:20px;cursor:pointer;}.modal-bd{padding:10px;}'
+      + '.fieldset{border:1px solid #b7b7b7;margin:0 0 8px;padding:10px;}.legend{display:inline-block;margin-top:-18px;background:#efefef;padding:0 4px;color:#333;}'
+      + '.dialog-grid{display:grid;grid-template-columns:92px 1fr 150px;gap:8px;align-items:center;margin-top:6px;}'
+      + '.dialog-grid input,.dialog-grid select{height:24px;border:2px inset #aaa;background:#fff;font:13px Arial,Helvetica,sans-serif;}'
+      + '.dialog-grid button,.modal-actions button{height:28px;min-width:86px;border:2px solid;border-color:#fff #777 #777 #fff;background:#efefef;font:13px Arial,Helvetica,sans-serif;cursor:pointer;}'
+      + '.dialog-two{display:grid;grid-template-columns:1fr 1fr;gap:8px;}.radio-line{display:flex;align-items:center;gap:8px;margin:6px 0;}'
+      + '.small-input{width:54px;height:24px;border:2px inset #aaa;background:#fff;}.modal-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:8px;}'
+      + '.progress{min-width:470px;border:1px solid #bbb;background:#f4f4f4;padding:15px 18px;font:14px Arial,Helvetica,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.18);}'
+      + '.progress-page{margin:10px 0 6px;}.progress-bar{height:20px;border:2px inset #ddd;background:repeating-linear-gradient(90deg,#168de2 0,#168de2 10px,#fff 10px,#fff 13px);}'
       + '@page{size:A4 landscape;margin:10mm;}'
-      + '@media print{body{margin:0;} .supplier{page-break-inside:avoid;} tr{page-break-inside:avoid;}}'
+      + '@media print{body{margin:0;background:#fff;overflow:visible;}.preview-title,.preview-toolbar,.modal-shade{display:none!important;}.preview-stage{min-height:auto;padding:0;background:#fff;}.paper-rail{border:0;max-width:none;margin:0;}.paper{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none;transform:none!important;}.supplier{page-break-inside:avoid;}tr{page-break-inside:avoid;}.report-content{font-size:10px;}}'
       + '</style></head><body>';
-    html += '<h1>SOLICITACAO DE TRANSFERENCIA - CORTES FORNECEDORES</h1>';
+    html += '<div class="preview-title">Pré-visualização</div>';
+    html += '<div class="preview-toolbar">'
+      + '<button type="button" id="pv-print">Imprimir</button><button type="button" id="pv-save">Salvar</button><button type="button" disabled>Enviar</button>'
+      + '<span class="tool-sep"></span><span class="tool-icon">▣</span><button class="tool-icon" type="button">↞</button><button class="tool-icon" type="button">←</button>'
+      + '<span>Página</span><input class="page-input" value="1"><span>de ' + estimatedPages + '</span><button class="tool-icon" type="button">→</button><button class="tool-icon" type="button">↠</button>'
+      + '<span class="tool-sep"></span><button class="tool-icon" type="button">⌕</button><button class="tool-icon" type="button">⊕</button>'
+      + '<select id="pv-zoom" class="zoom-select"><option value="1">100%</option><option value=".9">90%</option><option value=".8">80%</option><option value=".7">70%</option><option value=".6">60%</option></select>'
+      + '<span class="tool-sep"></span><button class="tool-icon" type="button">↕</button><button class="tool-icon" type="button">↖</button><button type="button" id="pv-close">Fechar</button></div>';
+    html += '<div class="preview-stage"><div class="paper-rail"><main class="paper"><section class="report-content">';
+    html += '<h1>SOLICITACAO DE TRANSFERENCIA</h1><h3>RELATORIO DE CORTES DE FORNECEDORES</h3>';
     html += '<div class="top">'
       + '<div><strong>Numero:</strong> ' + escapeHtml(meta.numero || '-') + '</div>'
       + '<div><strong>Status:</strong> ' + escapeHtml(meta.status || '-') + '</div>'
       + '<div><strong>Filial destino:</strong> ' + escapeHtml(meta.filial || '-') + '</div>'
-      + '<div><strong>Data solicitacao:</strong> ' + escapeHtml(meta.data || '-') + '</div>'
-      + '<div><strong>Validade:</strong> ' + escapeHtml(meta.validade || '-') + '</div>'
       + '<div><strong>CNPJ:</strong> ' + escapeHtml(meta.cnpj || '-') + '</div>'
+      + '<div><strong>Data solicitacao:</strong> ' + escapeHtml(meta.data || '-') + '</div>'
       + '<div><strong>Gerado em:</strong> ' + escapeHtml(generated) + '</div>'
+      + '<div><strong>Validade:</strong> ' + escapeHtml(meta.validade || '-') + '</div>'
       + '<div><strong>Excel BI:</strong> ' + escapeHtml(state.excel.fileName || '-') + '</div>'
-      + '<div><strong>PDF:</strong> ' + escapeHtml(state.pdf.fileName || '-') + '</div>'
+      + '<div class="filters"><strong>PDF:</strong> ' + escapeHtml(state.pdf.fileName || '-') + ' &nbsp;&nbsp; <strong>Filtros:</strong> Fornecedores diretos cortados</div>'
       + '</div>';
     html += '<div class="boxrow"><div class="box"><h2>RESUMO DE QUANTIDADES</h2><div class="kv">'
       + '<div><span>Sugestoes BI</span>' + fmtNumber(state.excel.suggestions.length) + '</div>'
@@ -1321,16 +1357,25 @@
       html += '</tbody></table></section>';
     });
 
-    html += '<div class="foot"><span>Visual Sistemas</span><span>Relatorio de cortes de fornecedores</span></div>';
+    html += '<div class="foot"><span>Visual Sistemas</span><span>Pagina 1 &nbsp;&nbsp;&nbsp;&nbsp; de ' + estimatedPages + '</span></div>';
+    html += '</section></main></div></div>';
+    html += '<div class="modal-shade" id="print-dialog"><section class="classic-modal"><div class="modal-hd"><span>Imprimir</span><button class="modal-x" type="button" data-close>×</button></div><div class="modal-bd">'
+      + '<div class="fieldset"><span class="legend">Impressora</span><div class="dialog-grid"><label>Nome:</label><select><option>Impressora padrão do Windows</option><option>Microsoft Print to PDF</option></select><button type="button">Propriedades</button><label>Usar Filtro:</label><select disabled><option>Padrão</option></select><label><input type="checkbox" disabled> Imprimir em arquivo</label></div></div>'
+      + '<div class="dialog-two"><div class="fieldset"><span class="legend">Intervalo de páginas</span><label class="radio-line"><input type="radio" checked> Tudo</label><label class="radio-line"><input type="radio"> Páginas de <input class="small-input" value="1"> até <input class="small-input" value="' + estimatedPages + '"></label><label class="radio-line"><input type="radio" disabled> Seleção</label></div>'
+      + '<div><div class="fieldset"><span class="legend">Cópias</span><div class="dialog-grid" style="grid-template-columns:130px 1fr"><label>Número de cópias:</label><input value="1"><label>Ímpares/Pares:</label><select><option>Todas</option></select></div></div><div class="fieldset"><span class="legend">Duplex</span><label class="radio-line"><input type="checkbox"> Impressão frente e verso</label></div></div></div>'
+      + '<div class="modal-actions"><button type="button" id="print-ok">OK</button><button type="button" data-close>Cancelar</button></div></div></section></div>';
+    html += '<div class="modal-shade" id="save-dialog"><section class="classic-modal save"><div class="modal-hd"><span>Salvar</span><button class="modal-x" type="button" data-close>×</button></div><div class="modal-bd">'
+      + '<div class="dialog-grid" style="grid-template-columns:100px 1fr 26px"><label>Usar Filtro</label><select><option>Documento PDF</option></select><span></span><label>Nome do arquivo</label><input id="save-file-name" value="Cortes_Fornecedores_' + fileDate(new Date()) + '.pdf"><button type="button">...</button></div>'
+      + '<div class="fieldset" style="margin-top:10px"><span class="legend">Intervalo de páginas</span><label class="radio-line"><input type="radio" checked> Tudo</label><label class="radio-line"><input type="radio"> Páginas de <input class="small-input" value="1"> até <input class="small-input" value="' + estimatedPages + '"></label><label class="radio-line"><input type="radio" disabled> Seleção</label></div>'
+      + '<div class="modal-actions"><button type="button" id="save-ok">Salvar</button><button type="button" data-close>Cancelar</button></div></div></section></div>';
+    html += '<div class="modal-shade" id="progress-dialog"><section class="progress"><div id="progress-title">Imprimindo o relatório...</div><div class="progress-page">Página 1</div><div class="progress-bar"></div><div class="modal-actions"><button type="button" data-close>Cancelar</button></div></section></div>';
+    html += '<script>(function(){var $=function(id){return document.getElementById(id);};function openDialog(id){$(id).classList.add("is-open");}function closeDialogs(){document.querySelectorAll(".modal-shade").forEach(function(el){el.classList.remove("is-open");});}function doPrint(label){closeDialogs();$("progress-title").textContent=label;openDialog("progress-dialog");setTimeout(function(){closeDialogs();window.focus();window.print();},450);}$("pv-print").addEventListener("click",function(){openDialog("print-dialog");});$("pv-save").addEventListener("click",function(){openDialog("save-dialog");});$("pv-close").addEventListener("click",function(){window.close();});$("print-ok").addEventListener("click",function(){doPrint("Imprimindo o relatório...");});$("save-ok").addEventListener("click",function(){var name=$("save-file-name").value||document.title;document.title=name.replace(/\\.pdf$/i,"");doPrint("Salvando o relatório...");});$("pv-zoom").addEventListener("change",function(){document.querySelector(".paper").style.transform="scale("+this.value+")";});document.querySelectorAll("[data-close]").forEach(function(btn){btn.addEventListener("click",closeDialogs);});})();</script>';
     html += '</body></html>';
     win.document.open();
     win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(function () {
-      win.print();
-    }, 250);
-    setStatus('Relatório de impressão aberto.', 'ok');
+    setStatus('Pré-visualização de impressão aberta.', 'ok');
   }
 
   function exportExcel() {
