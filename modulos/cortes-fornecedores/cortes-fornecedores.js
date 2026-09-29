@@ -1,6 +1,6 @@
 (function () {
   var MEMORY_KEY = 'cf_supplier_memory_v2';
-  var PRINT_BRIDGE_URL = 'http://127.0.0.1:9127';
+  var PRINT_BRIDGE_URLS = ['http://127.0.0.1:9127', 'http://localhost:9127'];
 
   var REQUIRED_HEADERS = [
     { key: 'codigo', label: 'CODIGO' },
@@ -68,6 +68,7 @@
       zoom: 1,
       printers: [],
       bridgeReady: false,
+      bridgeUrl: '',
       defaultPrinter: '',
       lastSavePath: ''
     }
@@ -1411,8 +1412,8 @@
     el.classList.toggle('is-error', kind === 'error');
   }
 
-  function bridgeFetch(path, payload) {
-    return fetch(PRINT_BRIDGE_URL + path, {
+  function fetchJson(url, payload) {
+    return fetch(url, {
       method: payload ? 'POST' : 'GET',
       headers: payload ? { 'Content-Type': 'application/json' } : undefined,
       body: payload ? JSON.stringify(payload) : undefined
@@ -1424,10 +1425,34 @@
     });
   }
 
+  function detectBridge() {
+    if (state.preview.bridgeUrl) {
+      return fetchJson(state.preview.bridgeUrl + '/status').then(function () {
+        return state.preview.bridgeUrl;
+      });
+    }
+    return PRINT_BRIDGE_URLS.reduce(function (chain, url) {
+      return chain.catch(function () {
+        return fetchJson(url + '/status').then(function () {
+          state.preview.bridgeUrl = url;
+          return url;
+        });
+      });
+    }, Promise.reject(new Error('Ponte local não detectada.')));
+  }
+
+  function bridgeFetch(path, payload) {
+    return detectBridge().then(function (url) {
+      return fetchJson(url + path, payload);
+    });
+  }
+
   function refreshPrinters() {
     var select = byId('cf-printer-name');
 
-    return bridgeFetch('/printers').then(function (data) {
+    return detectBridge().then(function () {
+      return bridgeFetch('/printers');
+    }).then(function (data) {
       state.preview.bridgeReady = true;
       state.preview.printers = data.printers || [];
       state.preview.defaultPrinter = data.defaultPrinter || '';
@@ -1444,10 +1469,11 @@
         : 'Ponte local conectada, mas nenhuma impressora foi encontrada no Windows.', state.preview.printers.length ? 'ok' : 'error');
     }).catch(function () {
       state.preview.bridgeReady = false;
+      state.preview.bridgeUrl = '';
       if (select) {
         select.innerHTML = '<option value="">Ponte local não iniciada</option><option>Microsoft Print to PDF</option>';
       }
-      setBridgeStatus('Ponte local não encontrada. Inicie print-bridge/start-print-bridge.bat para listar impressoras e salvar em caminho escolhido.', 'error');
+      setBridgeStatus('Ponte local não encontrada. Abra INICIAR_SISTEMA_COM_PONTE.bat ou print-bridge/start-print-bridge.bat e mantenha a janela aberta.', 'error');
     });
   }
 

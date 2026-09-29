@@ -982,7 +982,7 @@ tbody tr:hover td {
 }
 
 .cf-save-dialog {
-  width: 488px;
+  width: 490px;
 }
 
 .cf-dialog-title {
@@ -1040,10 +1040,16 @@ tbody tr:hover td {
 
 .cf-save-grid {
   display: grid;
-  grid-template-columns: 112px 1fr 26px;
+  grid-template-columns: 112px minmax(0, 1fr) 28px;
   gap: 7px 8px;
   align-items: center;
   margin: 5px 6px 8px;
+}
+
+.cf-save-grid input,
+.cf-save-grid select {
+  width: 100%;
+  min-width: 0;
 }
 
 .cf-classic-dialog input,
@@ -1065,6 +1071,12 @@ tbody tr:hover td {
   color: #111;
   cursor: pointer;
   font: 14px Arial, Helvetica, sans-serif;
+}
+
+#cf-save-browse {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
 }
 
 .cf-dialog-columns {

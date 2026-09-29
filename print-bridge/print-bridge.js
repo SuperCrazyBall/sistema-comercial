@@ -8,6 +8,7 @@ const { execFile, spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 
 const PORT = 9127;
+const bridgeRoot = __dirname;
 
 function send(res, status, data) {
   res.writeHead(status, {
@@ -157,11 +158,87 @@ function renderPdf(html, outputPath) {
   });
 }
 
+function stripHtmlText(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(h1|h2|h3|tr|table|section|div|p)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function renderPdfFallback(html, outputPath) {
+  const textPath = tempName('.txt');
+  const pdfPath = outputPath || tempName('.pdf');
+  fs.writeFileSync(textPath, stripHtmlText(html), 'utf8');
+  await runPowerShell(`
+Add-Type -AssemblyName System.Drawing
+$text = Get-Content -LiteralPath ${psString(textPath)} -Raw
+$out = ${psString(pdfPath)}
+$escaped = $text.Replace('\\', '\\\\').Replace('(', '\\(').Replace(')', '\\)')
+$lines = @()
+foreach ($line in $escaped -split "\`r?\`n") {
+  while ($line.Length -gt 150) {
+    $lines += $line.Substring(0, 150)
+    $line = $line.Substring(150)
+  }
+  $lines += $line
+}
+$objects = New-Object System.Collections.Generic.List[string]
+$content = "BT /F1 8 Tf 34 560 Td 10 TL "
+foreach ($line in $lines) {
+  $content += "($line) Tj T* "
+}
+$content += "ET"
+$objects.Add("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
+$objects.Add("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj")
+$objects.Add("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >> endobj")
+$objects.Add("4 0 obj << /Length $($content.Length) >> stream\`n$content\`nendstream endobj")
+$objects.Add("5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj")
+$bytes = New-Object System.Text.StringBuilder
+[void]$bytes.Append("%PDF-1.4\`n")
+$offsets = @(0)
+foreach ($obj in $objects) {
+  $offsets += $bytes.Length
+  [void]$bytes.Append($obj).Append("\`n")
+}
+$xref = $bytes.Length
+[void]$bytes.Append("xref\`n0 6\`n0000000000 65535 f \`n")
+for ($i = 1; $i -lt $offsets.Count; $i++) {
+  [void]$bytes.Append($offsets[$i].ToString("0000000000")).Append(" 00000 n \`n")
+}
+[void]$bytes.Append("trailer << /Size 6 /Root 1 0 R >>\`nstartxref\`n").Append($xref).Append("\`n%%EOF")
+[System.IO.File]::WriteAllText($out, $bytes.ToString(), [System.Text.Encoding]::ASCII)
+`);
+  fs.rm(textPath, { force: true }, () => {});
+  if (!fs.existsSync(pdfPath)) throw new Error('Falha ao gerar PDF de contingência.');
+  return pdfPath;
+}
+
+async function renderPdfSafe(html, outputPath) {
+  try {
+    return await renderPdf(html, outputPath);
+  } catch (err) {
+    console.warn('Edge/Chrome não gerou PDF, usando fallback textual:', err.message);
+    return renderPdfFallback(html, outputPath);
+  }
+}
+
 async function savePdf(payload) {
   if (!payload.path) throw new Error('Caminho do PDF não informado.');
   const outputPath = path.resolve(payload.path);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  const pdfPath = await renderPdf(payload.html || '', outputPath);
+  const pdfPath = await renderPdfSafe(payload.html || '', outputPath);
   return { ok: true, path: pdfPath };
 }
 
@@ -176,7 +253,7 @@ async function saveFile(payload) {
 
 async function printReport(payload) {
   const printer = payload.printer || '';
-  const pdfPath = await renderPdf(payload.html || '', tempName('.pdf'));
+  const pdfPath = await renderPdfSafe(payload.html || '', tempName('.pdf'));
   let warning = '';
 
   if (!printer) {
