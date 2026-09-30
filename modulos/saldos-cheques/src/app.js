@@ -72,12 +72,14 @@
     syncTimer: null
   };
 
+  const FINANCE_MODULE_VERSION = "2.0.0.66";
   const FIREBASE_FALLBACK_URL = "https://comercial-norte-default-rtdb.firebaseio.com/";
-  const LATEST_ANALYSIS_CACHE_KEY = "finance_latest_analysis_cache_v1";
+  const LATEST_ANALYSIS_CACHE_KEY = "finance_latest_analysis_cache_v2";
   const DATE_MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   const DATE_DOW = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
   let datePickerTarget = null;
   let datePickerView = null;
+  window.FINANCE_MODULE_VERSION = FINANCE_MODULE_VERSION;
 
   const lineChart = new window.FinanceCharts.FinanceChart(
     document.getElementById("flowChart"),
@@ -260,7 +262,34 @@
       lineChart.draw(records);
       barChart.draw(records);
     };
-    [0, 120, 360, 800, 1400, 2200].forEach((delay) => {
+    [0, 80, 160, 320, 640, 1000, 1600, 2400, 3600].forEach((delay) => {
+      window.setTimeout(() => window.requestAnimationFrame(redraw), delay);
+    });
+  }
+
+  function hasRenderablePaymentData() {
+    return paymentDaily().some((day) => (
+      cleanNumber(day.receiptsTotal) > 0 ||
+      cleanNumber(day.paymentsTotal) > 0 ||
+      (Array.isArray(day.methods) && day.methods.some((method) => cleanNumber(method.value) > 0)) ||
+      (Array.isArray(day.paymentDetails) && day.paymentDetails.some((payment) => cleanNumber(payment.value) > 0))
+    ));
+  }
+
+  function ensureRenderedCharts() {
+    if (!state.analysis || !Array.isArray(state.analysis.records) || !state.analysis.records.length) {
+      return;
+    }
+    const redraw = () => {
+      const records = filteredRecords();
+      state.visibleRecords = records;
+      if (hasRenderablePaymentData()) {
+        updatePayments();
+      }
+      lineChart.draw(records);
+      barChart.draw(records);
+    };
+    [120, 420, 900, 1800, 3200].forEach((delay) => {
       window.setTimeout(() => window.requestAnimationFrame(redraw), delay);
     });
   }
@@ -361,11 +390,11 @@
     if (!Array.isArray(analysis.sheets) && Array.isArray(snapshot?.sheets)) {
       analysis.sheets = snapshot.sheets;
     }
-    if (!analysis.paymentFlow || !Array.isArray(analysis.paymentFlow.daily) || !analysis.paymentFlow.daily.length) {
-      const snapshotDaily = snapshot?.paymentFlow?.daily;
-      if (Array.isArray(snapshotDaily) && snapshotDaily.length) {
-        analysis.paymentFlow = { daily: snapshotDaily };
-      }
+    const snapshotDaily = snapshot?.paymentFlow?.daily;
+    if (Array.isArray(snapshotDaily) && snapshotDaily.length) {
+      analysis.paymentFlow = { daily: snapshotDaily.map(cleanPaymentDaily).filter(Boolean) };
+    } else if (Array.isArray(analysis.paymentFlow?.daily)) {
+      analysis.paymentFlow = { daily: analysis.paymentFlow.daily.map(cleanPaymentDaily).filter(Boolean) };
     }
     if (!analysis.validation) {
       analysis.validation = { status: "warn", message: "Analise carregada do Firebase." };
@@ -877,6 +906,7 @@
     updateTable(records);
     lineChart.draw(records);
     barChart.draw(records);
+    ensureRenderedCharts();
 
     els.saveImage.disabled = !records.length;
     els.print.disabled = !records.length;
@@ -910,6 +940,7 @@
     setView("summary");
     renderAnalysis();
     redrawChartsSoon();
+    ensureRenderedCharts();
     const meta = latestMetaText(normalized);
     setStatus(`Última análise carregada${sourceLabel ? ` (${sourceLabel})` : ""}.`, "ok");
     setSyncStatus(meta || "Última análise carregada.", "ok");
@@ -921,9 +952,6 @@
       return;
     }
     const available = restoreCachedLatest();
-    if (!auto && available) {
-      applyLatestAnalysis(available, "memória local");
-    }
     setSyncStatus("Verificando última análise publicada...", null);
     try {
       const resp = await fetch(latestAnalysisUrl(), { cache: "no-store" });
@@ -951,11 +979,7 @@
       if (cached && cached.analysis) {
         rememberLatest(cached);
         if (!auto) {
-          if (!available) {
-            applyLatestAnalysis(cached, "cache local");
-          } else {
-            setSyncStatus(latestMetaText(cached), "ok");
-          }
+          applyLatestAnalysis(cached, "cache local");
         } else if (!state.file && (!state.analysis || cached.ts !== state.latestAppliedTs)) {
           applyLatestAnalysis(cached, "cache local");
         } else {
@@ -1224,9 +1248,13 @@
   });
 
   window.FinanceSaldosCheques = {
+    version: FINANCE_MODULE_VERSION,
     openLatest: () => loadLatestAnalysis(false),
     refreshLatest: () => loadLatestAnalysis(true),
-    redraw: redrawChartsSoon
+    redraw: () => {
+      redrawChartsSoon();
+      ensureRenderedCharts();
+    }
   };
 
   function startFinanceSyncWhenAuthorized() {
@@ -1244,5 +1272,6 @@
 
   resetAnalysis();
   restoreCachedLatest();
+  console.info(`Financeiro Saldos e Cheques v${FINANCE_MODULE_VERSION} carregado.`);
   startFinanceSyncWhenAuthorized();
 }());
