@@ -64,10 +64,12 @@
     file: null,
     analysis: null,
     latestRemote: null,
+    latestAppliedTs: null,
     visibleRecords: [],
     view: "summary",
     paymentView: "summary",
-    syncStarted: false
+    syncStarted: false,
+    syncTimer: null
   };
 
   const FIREBASE_FALLBACK_URL = "https://comercial-norte-default-rtdb.firebaseio.com/";
@@ -195,11 +197,11 @@
   }
 
   function rememberLatest(payload) {
-    state.latestRemote = payload || null;
+    state.latestRemote = normalizeLatestPayload(payload) || null;
     refreshLatestButton();
     try {
-      if (payload) {
-        localStorage.setItem(LATEST_ANALYSIS_CACHE_KEY, JSON.stringify(payload));
+      if (state.latestRemote) {
+        localStorage.setItem(LATEST_ANALYSIS_CACHE_KEY, JSON.stringify(state.latestRemote));
       }
     } catch (error) {}
   }
@@ -229,7 +231,7 @@
 
   function restoreCachedLatest() {
     if (!state.latestRemote) {
-      const cached = cachedLatest();
+      const cached = normalizeLatestPayload(cachedLatest());
       if (cached && cached.analysis) {
         state.latestRemote = cached;
       }
@@ -261,6 +263,118 @@
     [0, 120, 360, 800, 1400, 2200].forEach((delay) => {
       window.setTimeout(() => window.requestAnimationFrame(redraw), delay);
     });
+  }
+
+  function cleanNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function cleanRecord(record) {
+    if (!record || typeof record !== "object") {
+      return null;
+    }
+    return {
+      key: String(record.key || ""),
+      label: String(record.label || ""),
+      rawLabel: String(record.rawLabel || record.label || ""),
+      dateStart: String(record.dateStart || ""),
+      dateEnd: String(record.dateEnd || ""),
+      entries: cleanNumber(record.entries),
+      exits: cleanNumber(record.exits),
+      balance: cleanNumber(record.balance),
+      row: record.row || null,
+      col: record.col || null,
+      source: record.source || ""
+    };
+  }
+
+  function cleanPaymentItem(item) {
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+    return {
+      name: String(item.name || item.label || ""),
+      label: String(item.label || item.name || ""),
+      value: cleanNumber(item.value),
+      kind: item.kind || "",
+      parent: item.parent || ""
+    };
+  }
+
+  function cleanPaymentDaily(day) {
+    if (!day || typeof day !== "object") {
+      return null;
+    }
+    return {
+      col: day.col || null,
+      label: String(day.label || ""),
+      shortLabel: String(day.shortLabel || day.label || ""),
+      dateStart: String(day.dateStart || ""),
+      dateEnd: String(day.dateEnd || ""),
+      receiptsTotal: cleanNumber(day.receiptsTotal),
+      paymentsTotal: cleanNumber(day.paymentsTotal),
+      methods: Array.isArray(day.methods) ? day.methods.map((method) => ({
+        name: String(method.name || ""),
+        value: cleanNumber(method.value),
+        details: Array.isArray(method.details) ? method.details.map(cleanPaymentItem).filter(Boolean) : []
+      })).filter((method) => method.name || method.value || method.details.length) : [],
+      paymentDetails: Array.isArray(day.paymentDetails) ? day.paymentDetails.map(cleanPaymentItem).filter(Boolean) : []
+    };
+  }
+
+  function createUiSnapshot(analysis) {
+    const records = Array.isArray(analysis?.records) ? analysis.records.map(cleanRecord).filter(Boolean) : [];
+    const daily = Array.isArray(analysis?.paymentFlow?.daily) ? analysis.paymentFlow.daily.map(cleanPaymentDaily).filter(Boolean) : [];
+    return {
+      version: 2,
+      records,
+      paymentFlow: { daily },
+      summary: analysis?.summary || null,
+      validation: analysis?.validation || null,
+      fluxoSource: analysis?.fluxoSource || null,
+      sheets: Array.isArray(analysis?.sheets) ? analysis.sheets.slice() : [],
+      defaultPaymentAggregate: aggregatePaymentFlow(daily)
+    };
+  }
+
+  function normalizeLatestPayload(payload) {
+    if (!payload || typeof payload !== "object") {
+      return null;
+    }
+    const normalized = { ...payload };
+    const snapshot = normalized.uiSnapshot && typeof normalized.uiSnapshot === "object" ? normalized.uiSnapshot : null;
+    const analysis = normalized.analysis && typeof normalized.analysis === "object" ? { ...normalized.analysis } : {};
+
+    if ((!Array.isArray(analysis.records) || !analysis.records.length) && Array.isArray(snapshot?.records)) {
+      analysis.records = snapshot.records;
+    }
+    if (!analysis.summary && snapshot?.summary) {
+      analysis.summary = snapshot.summary;
+    }
+    if (!analysis.validation && snapshot?.validation) {
+      analysis.validation = snapshot.validation;
+    }
+    if (!analysis.fluxoSource && snapshot?.fluxoSource) {
+      analysis.fluxoSource = snapshot.fluxoSource;
+    }
+    if (!Array.isArray(analysis.sheets) && Array.isArray(snapshot?.sheets)) {
+      analysis.sheets = snapshot.sheets;
+    }
+    if (!analysis.paymentFlow || !Array.isArray(analysis.paymentFlow.daily) || !analysis.paymentFlow.daily.length) {
+      const snapshotDaily = snapshot?.paymentFlow?.daily;
+      if (Array.isArray(snapshotDaily) && snapshotDaily.length) {
+        analysis.paymentFlow = { daily: snapshotDaily };
+      }
+    }
+    if (!analysis.validation) {
+      analysis.validation = { status: "warn", message: "Analise carregada do Firebase." };
+    }
+    if (!analysis.fluxoSource) {
+      analysis.fluxoSource = { message: "Fonte carregada da ultima analise publicada." };
+    }
+    normalized.analysis = analysis;
+    return normalized;
   }
 
   function openDatePicker(input, event) {
@@ -347,7 +461,7 @@
       html += `<button class="${cls}" data-cal-pick="${current.getFullYear()}-${current.getMonth()}-${current.getDate()}" type="button"><span>${current.getDate()}</span></button>`;
     }
     html += "</div>";
-    html += '<div class="vcal-foot"><span class="vcal-today-mark"></span><span>Hoje</span></div>';
+    html += `<button class="vcal-foot" data-cal-today="${today.getFullYear()}-${today.getMonth()}-${today.getDate()}" type="button"><span class="vcal-today-mark"></span><span>Hoje: ${formatDatePtBr(`${today.getFullYear()}-${padDatePart(today.getMonth() + 1)}-${padDatePart(today.getDate())}`)}</span></button>`;
     els.datePop.innerHTML = html;
   }
 
@@ -581,7 +695,7 @@
     if (!state.analysis) {
       return "Todos";
     }
-    const days = (state.analysis.paymentFlow?.daily || []).filter(periodMatches);
+    const days = paymentDaily().filter(periodMatches);
     if (!days.length) {
       return "Sem registros";
     }
@@ -590,6 +704,10 @@
     const start = first.dateStart ? formatDatePtBr(first.dateStart) : first.label;
     const end = last.dateEnd ? formatDatePtBr(last.dateEnd) : last.label;
     return start === end ? start : `${start} até ${end}`;
+  }
+
+  function paymentDaily() {
+    return Array.isArray(state.analysis?.paymentFlow?.daily) ? state.analysis.paymentFlow.daily : [];
   }
 
   function updateMetrics(summary, recordCount) {
@@ -618,7 +736,7 @@
   }
 
   function updatePayments() {
-    const daily = state.analysis?.paymentFlow?.daily || [];
+    const daily = paymentDaily();
     const days = daily.filter(periodMatches);
     const aggregate = aggregatePaymentFlow(days);
     const topMethod = aggregate.receiptItems[0];
@@ -635,8 +753,8 @@
     els.payoutLabelHeader.textContent = isDetail ? "Origem detalhada" : "Origem";
 
     if (!daily.length) {
-      els.receiptBody.innerHTML = '<tr><td colspan="3">A aba fluxo diario não foi encontrada para esta análise.</td></tr>';
-      els.payoutBody.innerHTML = '<tr><td colspan="3">A aba fluxo diario não foi encontrada para esta análise.</td></tr>';
+      els.receiptBody.innerHTML = '<tr><td colspan="3">Esta análise publicada não trouxe os dados de formas de pagamento. Gere uma nova análise para atualizar os gráficos compartilhados.</td></tr>';
+      els.payoutBody.innerHTML = '<tr><td colspan="3">Esta análise publicada não trouxe os dados de formas de pagamento. Gere uma nova análise para atualizar os gráficos compartilhados.</td></tr>';
       receiptChart.draw([]);
       payoutChart.draw([]);
       return;
@@ -775,22 +893,24 @@
   }
 
   function applyLatestAnalysis(payload, sourceLabel) {
-    if (!payload || !payload.analysis || !Array.isArray(payload.analysis.records)) {
+    const normalized = normalizeLatestPayload(payload);
+    if (!normalized || !normalized.analysis || !Array.isArray(normalized.analysis.records)) {
       setSyncStatus("Nenhuma análise financeira publicada.", "warn");
       return false;
     }
-    state.analysis = payload.analysis;
+    state.analysis = normalized.analysis;
+    state.latestAppliedTs = normalized.ts || null;
     state.file = null;
     els.file.value = "";
-    els.fileName.textContent = payload.fileName ? `Última análise: ${payload.fileName}` : "Última análise publicada";
+    els.fileName.textContent = normalized.fileName ? `Última análise: ${normalized.fileName}` : "Última análise publicada";
     els.analyze.disabled = true;
-    els.periodMode.value = payload.periodMode || "all";
-    setDateValue(els.dateFrom, payload.dateFrom || "");
-    setDateValue(els.dateTo, payload.dateTo || "");
+    els.periodMode.value = normalized.periodMode || "all";
+    setDateValue(els.dateFrom, normalized.dateFrom || "");
+    setDateValue(els.dateTo, normalized.dateTo || "");
     setView("summary");
     renderAnalysis();
     redrawChartsSoon();
-    const meta = latestMetaText(payload);
+    const meta = latestMetaText(normalized);
     setStatus(`Última análise carregada${sourceLabel ? ` (${sourceLabel})` : ""}.`, "ok");
     setSyncStatus(meta || "Última análise carregada.", "ok");
     return true;
@@ -810,8 +930,8 @@
       if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}`);
       }
-      const payload = await resp.json();
-      if (!payload || !payload.analysis) {
+      const payload = normalizeLatestPayload(await resp.json());
+      if (!payload || !Array.isArray(payload.analysis?.records)) {
         if (available) {
           setSyncStatus(latestMetaText(available), "ok");
         } else {
@@ -820,13 +940,14 @@
         }
         return;
       }
+      const shouldAutoApply = auto && payload.ts && payload.ts !== state.latestAppliedTs && (!state.analysis || !state.file);
       rememberLatest(payload);
       setSyncStatus(latestMetaText(payload), "ok");
-      if (!auto) {
+      if (!auto || shouldAutoApply) {
         applyLatestAnalysis(payload, "Firebase");
       }
     } catch (error) {
-      const cached = cachedLatest() || available;
+      const cached = normalizeLatestPayload(cachedLatest()) || available;
       if (cached && cached.analysis) {
         rememberLatest(cached);
         if (!auto) {
@@ -835,6 +956,8 @@
           } else {
             setSyncStatus(latestMetaText(cached), "ok");
           }
+        } else if (!state.file && (!state.analysis || cached.ts !== state.latestAppliedTs)) {
+          applyLatestAnalysis(cached, "cache local");
         } else {
           setSyncStatus("Firebase indisponível. Última análise em cache disponível.", "warn");
         }
@@ -852,6 +975,7 @@
     const user = currentUser() || {};
     const now = Date.now();
     const payload = {
+      schemaVersion: 2,
       ts: now,
       publishedAt: new Date(now).toISOString(),
       publishedBy: user.name || "FINANCEIRO",
@@ -859,9 +983,12 @@
       periodMode: els.periodMode.value || "all",
       dateFrom: dateValue(els.dateFrom),
       dateTo: dateValue(els.dateTo),
-      analysis: JSON.parse(JSON.stringify(state.analysis))
+      analysis: JSON.parse(JSON.stringify(state.analysis)),
+      uiSnapshot: createUiSnapshot(state.analysis)
     };
+    payload.analysis.paymentFlow = payload.uiSnapshot.paymentFlow;
     rememberLatest(payload);
+    state.latestAppliedTs = payload.ts;
     setSyncStatus("Publicando última análise...", null);
     try {
       const resp = await fetch(latestAnalysisUrl(), {
@@ -1058,6 +1185,12 @@
     if (pick) {
       const parts = pick.getAttribute("data-cal-pick").split("-").map(Number);
       pickDate(parts[0], parts[1], parts[2], event);
+      return;
+    }
+    const today = event.target.closest("[data-cal-today]");
+    if (today) {
+      const parts = today.getAttribute("data-cal-today").split("-").map(Number);
+      pickDate(parts[0], parts[1], parts[2], event);
     }
   });
   document.addEventListener("click", (event) => {
@@ -1077,6 +1210,7 @@
     state.file = null;
     els.fileName.textContent = "Nenhum arquivo selecionado";
     els.analyze.disabled = true;
+    state.latestAppliedTs = null;
     resetAnalysis();
     setStatus("Aguardando arquivo Excel.");
     showLatestAvailabilityStatus();
@@ -1105,6 +1239,7 @@
     }
     state.syncStarted = true;
     loadLatestAnalysis(true);
+    state.syncTimer = window.setInterval(() => loadLatestAnalysis(true), 20000);
   }
 
   resetAnalysis();
