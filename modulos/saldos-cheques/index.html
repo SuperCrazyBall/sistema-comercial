@@ -51,11 +51,11 @@
                 </label>
                 <label>
                   De
-                  <input id="dateFrom" class="vs-input" type="date" disabled>
+                  <input id="dateFrom" class="vs-input vs-date-input" type="text" readonly disabled title="Data inicial">
                 </label>
                 <label>
                   Até
-                  <input id="dateTo" class="vs-input" type="date" disabled>
+                  <input id="dateTo" class="vs-input vs-date-input" type="text" readonly disabled title="Data final">
                 </label>
               </div>
               <div class="vs-actions action-strip">
@@ -275,6 +275,7 @@
   </main>
 
   <div id="tooltip" class="chart-tooltip" hidden></div>
+  <div id="financeDatePop" class="vs-date-pop"></div>
 
   <dialog id="helpDialog" class="help-dialog">
     <form method="dialog">

@@ -52,8 +52,15 @@
   function setupCanvas(canvas) {
     const rect = canvas.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
-    const width = Math.max(320, Math.floor(rect.width || canvas.width));
-    const height = Math.max(240, Math.floor(rect.height || canvas.height));
+    const parent = canvas.parentElement;
+    const parentRect = parent ? parent.getBoundingClientRect() : { width: 0, height: 0 };
+    const cssWidth = rect.width || parentRect.width || canvas.clientWidth || 0;
+    const cssHeight = rect.height || parentRect.height || canvas.clientHeight || 0;
+    if (cssWidth < 24 || cssHeight < 24 || !canvas.offsetParent) {
+      return null;
+    }
+    const width = Math.max(320, Math.floor(cssWidth));
+    const height = Math.max(240, Math.floor(cssHeight));
     canvas.width = width * ratio;
     canvas.height = height * ratio;
     const ctx = canvas.getContext("2d");
@@ -79,12 +86,45 @@
       this.canvas.addEventListener("mousemove", (event) => this.onMove(event));
       this.canvas.addEventListener("mouseleave", () => this.hideTooltip());
       window.addEventListener("resize", () => this.draw(this.records));
+      if ("ResizeObserver" in window) {
+        this.resizeObserver = new ResizeObserver(() => this.scheduleDraw());
+        this.resizeObserver.observe(this.canvas);
+        if (this.canvas.parentElement) {
+          this.resizeObserver.observe(this.canvas.parentElement);
+        }
+      }
+      if ("IntersectionObserver" in window) {
+        this.intersectionObserver = new IntersectionObserver((entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            this.scheduleDraw();
+          }
+        });
+        this.intersectionObserver.observe(this.canvas);
+      }
+    }
+
+    scheduleDraw() {
+      if (this._drawQueued) {
+        return;
+      }
+      this._drawQueued = true;
+      window.requestAnimationFrame(() => {
+        this._drawQueued = false;
+        this.draw(this.records);
+      });
     }
 
     draw(records) {
       this.records = records || [];
       this.points = [];
-      const { ctx, width, height } = setupCanvas(this.canvas);
+      const setup = setupCanvas(this.canvas);
+      if (!setup) {
+        if (this.records.length) {
+          window.setTimeout(() => this.scheduleDraw(), 160);
+        }
+        return;
+      }
+      const { ctx, width, height } = setup;
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = COLORS.background;
       ctx.fillRect(0, 0, width, height);

@@ -14,6 +14,7 @@
     periodMode: document.getElementById("periodMode"),
     dateFrom: document.getElementById("dateFrom"),
     dateTo: document.getElementById("dateTo"),
+    datePop: document.getElementById("financeDatePop"),
     summaryTitle: document.getElementById("summaryTitle"),
     summaryView: document.getElementById("summaryView"),
     detailView: document.getElementById("detailView"),
@@ -71,6 +72,10 @@
 
   const FIREBASE_FALLBACK_URL = "https://comercial-norte-default-rtdb.firebaseio.com/";
   const LATEST_ANALYSIS_CACHE_KEY = "finance_latest_analysis_cache_v1";
+  const DATE_MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  const DATE_DOW = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  let datePickerTarget = null;
+  let datePickerView = null;
 
   const lineChart = new window.FinanceCharts.FinanceChart(
     document.getElementById("flowChart"),
@@ -97,6 +102,32 @@
     els.status.textContent = message;
   }
 
+  function parentSyncText(message, mode) {
+    const text = String(message || "");
+    if (mode === "error" || /offline|indispon/i.test(text)) {
+      return { state: "err", text: "Offline" };
+    }
+    if (/publicando|salvando/i.test(text)) {
+      return { state: "busy", text: "Salvando..." };
+    }
+    if (/verificando|lendo|processando/i.test(text)) {
+      return { state: "busy", text: "Verificando..." };
+    }
+    if (/carregada|atualizada|disponível|disponivel/i.test(text)) {
+      return { state: "ok", text: "Atualizado ✓" };
+    }
+    if (/publicado|sincronizado/i.test(text)) {
+      return { state: "ok", text: "Sincronizado ✓" };
+    }
+    if (/nenhuma análise|nenhuma analise/i.test(text)) {
+      return { state: "ok", text: "Sincronizado ✓" };
+    }
+    if (mode === "warn") {
+      return { state: "ok", text: "Salvo local ✓" };
+    }
+    return { state: mode === "ok" ? "ok" : "busy", text: mode === "ok" ? "Sincronizado ✓" : "Verificando..." };
+  }
+
   function setSyncStatus(message, mode) {
     if (els.syncStatus) {
       els.syncStatus.textContent = message;
@@ -115,11 +146,8 @@
       if (!parentWindow || !parentUser || parentUser.role !== "financeiro" || typeof parentWindow.setSyncSt !== "function") {
         return;
       }
-      const parentMode = mode === "error" ? "err" : (mode === "ok" || mode === "warn" ? "ok" : "busy");
-      const parentMessage = String(message || "")
-        .replace(/^Última análise:\s*/i, "")
-        .replace(/\.$/, "");
-      parentWindow.setSyncSt(parentMode, parentMessage || "Sincronizado");
+      const mapped = parentSyncText(message, mode);
+      parentWindow.setSyncSt(mapped.state, mapped.text);
     } catch (error) {}
   }
 
@@ -235,6 +263,94 @@
     });
   }
 
+  function openDatePicker(input, event) {
+    if (!input || input.disabled || !els.datePop) {
+      return;
+    }
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    datePickerTarget = input;
+    const base = isoToDate(dateValue(input)) || new Date();
+    datePickerView = new Date(base.getFullYear(), base.getMonth(), 1);
+    renderDatePicker();
+    const rect = input.getBoundingClientRect();
+    const left = Math.min(rect.left, window.innerWidth - 198);
+    let top = rect.bottom + 2;
+    if (top + 205 > window.innerHeight) {
+      top = Math.max(2, rect.top - 205);
+    }
+    els.datePop.style.left = `${Math.max(2, left)}px`;
+    els.datePop.style.top = `${top}px`;
+    els.datePop.classList.add("on");
+  }
+
+  function closeDatePicker() {
+    if (els.datePop) {
+      els.datePop.classList.remove("on");
+    }
+  }
+
+  function moveDatePicker(delta, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!datePickerView) {
+      datePickerView = new Date();
+    }
+    datePickerView = new Date(datePickerView.getFullYear(), datePickerView.getMonth() + delta, 1);
+    renderDatePicker();
+  }
+
+  function pickDate(year, month, day, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!datePickerTarget) {
+      return;
+    }
+    const iso = `${year}-${padDatePart(month + 1)}-${padDatePart(day)}`;
+    setDateValue(datePickerTarget, iso);
+    datePickerTarget.dispatchEvent(new Event("change", { bubbles: true }));
+    closeDatePicker();
+  }
+
+  function renderDatePicker() {
+    if (!els.datePop) {
+      return;
+    }
+    const view = datePickerView || new Date();
+    const selected = isoToDate(dateValue(datePickerTarget));
+    const today = new Date();
+    const year = view.getFullYear();
+    const month = view.getMonth();
+    const first = new Date(year, month, 1);
+    const startOffset = (first.getDay() + 6) % 7;
+    const start = new Date(year, month, 1 - startOffset);
+    let html = "";
+    html += '<div class="vcal-hd">';
+    html += '<button class="vcal-nav" data-cal-move="-1" type="button">◄</button>';
+    html += `<div class="vcal-title">${DATE_MONTHS[month]} de ${year}</div>`;
+    html += '<button class="vcal-nav" data-cal-move="1" type="button">►</button>';
+    html += "</div>";
+    html += `<div class="vcal-week">${DATE_DOW.map((dayName) => `<div>${dayName}</div>`).join("")}</div>`;
+    html += '<div class="vcal-grid">';
+    for (let i = 0; i < 42; i++) {
+      const current = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      let cls = "vcal-day";
+      if (current.getMonth() !== month) cls += " muted";
+      if (sameDay(current, selected)) cls += " is-selected";
+      if (sameDay(current, today)) cls += " is-today";
+      html += `<button class="${cls}" data-cal-pick="${current.getFullYear()}-${current.getMonth()}-${current.getDate()}" type="button"><span>${current.getDate()}</span></button>`;
+    }
+    html += "</div>";
+    html += '<div class="vcal-foot"><span class="vcal-today-mark"></span><span>Hoje</span></div>';
+    els.datePop.innerHTML = html;
+  }
+
   function formatMoney(value) {
     return window.FinanceCharts.currency(value);
   }
@@ -284,6 +400,49 @@
     return `${day}/${month}/${year}`;
   }
 
+  function padDatePart(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function parseDateInputValue(value) {
+    const text = String(value || "").trim();
+    let match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (match) {
+      return `${match[1]}-${match[2]}-${match[3]}`;
+    }
+    match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+    if (match) {
+      return `${match[3]}-${match[2]}-${match[1]}`;
+    }
+    return "";
+  }
+
+  function dateValue(input) {
+    return input?.dataset?.iso || parseDateInputValue(input?.value);
+  }
+
+  function setDateValue(input, iso) {
+    if (!input) {
+      return;
+    }
+    const clean = parseDateInputValue(iso) || "";
+    input.dataset.iso = clean;
+    input.value = clean ? formatDatePtBr(clean) : "";
+  }
+
+  function isoToDate(iso) {
+    const clean = parseDateInputValue(iso);
+    if (!clean) {
+      return null;
+    }
+    const [year, month, day] = clean.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  function sameDay(a, b) {
+    return !!(a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate());
+  }
+
   function formatPeriodName(records) {
     if (!records.length) {
       return "Sem registros";
@@ -308,21 +467,21 @@
     els.dateTo.disabled = els.periodMode.value !== "custom" || !dated.length;
 
     if (!dated.length) {
-      els.dateFrom.value = "";
-      els.dateTo.value = "";
+      setDateValue(els.dateFrom, "");
+      setDateValue(els.dateTo, "");
       return;
     }
 
-    els.dateFrom.min = first.dateStart;
-    els.dateFrom.max = last.dateEnd;
-    els.dateTo.min = first.dateStart;
-    els.dateTo.max = last.dateEnd;
+    els.dateFrom.dataset.min = first.dateStart || "";
+    els.dateFrom.dataset.max = last.dateEnd || "";
+    els.dateTo.dataset.min = first.dateStart || "";
+    els.dateTo.dataset.max = last.dateEnd || "";
 
-    if (!els.dateFrom.value) {
-      els.dateFrom.value = first.dateStart;
+    if (!dateValue(els.dateFrom)) {
+      setDateValue(els.dateFrom, first.dateStart);
     }
-    if (!els.dateTo.value) {
-      els.dateTo.value = last.dateEnd;
+    if (!dateValue(els.dateTo)) {
+      setDateValue(els.dateTo, last.dateEnd);
     }
   }
 
@@ -334,8 +493,8 @@
       return state.analysis.records;
     }
 
-    const from = els.dateFrom.value;
-    const to = els.dateTo.value;
+    const from = dateValue(els.dateFrom);
+    const to = dateValue(els.dateTo);
     return state.analysis.records.filter((record) => (
       record.dateStart && record.dateEnd &&
       (!from || record.dateEnd >= from) &&
@@ -347,8 +506,8 @@
     if (els.periodMode.value !== "custom") {
       return true;
     }
-    const from = els.dateFrom.value;
-    const to = els.dateTo.value;
+    const from = dateValue(els.dateFrom);
+    const to = dateValue(els.dateTo);
     return item.dateStart && item.dateEnd &&
       (!from || item.dateEnd >= from) &&
       (!to || item.dateStart <= to);
@@ -626,8 +785,8 @@
     els.fileName.textContent = payload.fileName ? `Última análise: ${payload.fileName}` : "Última análise publicada";
     els.analyze.disabled = true;
     els.periodMode.value = payload.periodMode || "all";
-    els.dateFrom.value = payload.dateFrom || "";
-    els.dateTo.value = payload.dateTo || "";
+    setDateValue(els.dateFrom, payload.dateFrom || "");
+    setDateValue(els.dateTo, payload.dateTo || "");
     setView("summary");
     renderAnalysis();
     redrawChartsSoon();
@@ -698,8 +857,8 @@
       publishedBy: user.name || "FINANCEIRO",
       fileName: state.file ? state.file.name : "",
       periodMode: els.periodMode.value || "all",
-      dateFrom: els.dateFrom.value || "",
-      dateTo: els.dateTo.value || "",
+      dateFrom: dateValue(els.dateFrom),
+      dateTo: dateValue(els.dateTo),
       analysis: JSON.parse(JSON.stringify(state.analysis))
     };
     rememberLatest(payload);
@@ -724,8 +883,8 @@
     state.visibleRecords = [];
     els.periodMode.value = "all";
     els.periodMode.disabled = true;
-    els.dateFrom.value = "";
-    els.dateTo.value = "";
+    setDateValue(els.dateFrom, "");
+    setDateValue(els.dateTo, "");
     els.dateFrom.disabled = true;
     els.dateTo.disabled = true;
     updateMetrics({
@@ -779,8 +938,8 @@
       const analysis = await window.FinanceXlsx.parseWorkbook(state.file);
       state.analysis = analysis;
       els.periodMode.value = "all";
-      els.dateFrom.value = "";
-      els.dateTo.value = "";
+      setDateValue(els.dateFrom, "");
+      setDateValue(els.dateTo, "");
       renderAnalysis();
       await publishLatestAnalysis();
     } catch (error) {
@@ -866,19 +1025,46 @@
     const custom = els.periodMode.value === "custom";
     els.dateFrom.disabled = !custom || !state.analysis;
     els.dateTo.disabled = !custom || !state.analysis;
+    closeDatePicker();
     renderAnalysis();
   });
   els.dateFrom.addEventListener("change", () => {
-    if (els.dateTo.value && els.dateFrom.value > els.dateTo.value) {
-      els.dateTo.value = els.dateFrom.value;
+    const from = dateValue(els.dateFrom);
+    const to = dateValue(els.dateTo);
+    if (to && from > to) {
+      setDateValue(els.dateTo, from);
     }
     renderAnalysis();
   });
   els.dateTo.addEventListener("change", () => {
-    if (els.dateFrom.value && els.dateTo.value < els.dateFrom.value) {
-      els.dateFrom.value = els.dateTo.value;
+    const from = dateValue(els.dateFrom);
+    const to = dateValue(els.dateTo);
+    if (from && to < from) {
+      setDateValue(els.dateFrom, to);
     }
     renderAnalysis();
+  });
+  [els.dateFrom, els.dateTo].forEach((input) => {
+    input.addEventListener("click", (event) => openDatePicker(input, event));
+    input.addEventListener("focus", (event) => openDatePicker(input, event));
+  });
+  els.datePop.addEventListener("click", (event) => {
+    const move = event.target.closest("[data-cal-move]");
+    if (move) {
+      moveDatePicker(Number(move.getAttribute("data-cal-move")), event);
+      return;
+    }
+    const pick = event.target.closest("[data-cal-pick]");
+    if (pick) {
+      const parts = pick.getAttribute("data-cal-pick").split("-").map(Number);
+      pickDate(parts[0], parts[1], parts[2], event);
+    }
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("#financeDatePop") || event.target.classList.contains("vs-date-input")) {
+      return;
+    }
+    closeDatePicker();
   });
   els.summaryViewBtn.addEventListener("click", () => setView("summary"));
   els.detailViewBtn.addEventListener("click", () => setView("detail"));
