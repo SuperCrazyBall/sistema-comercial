@@ -5,10 +5,12 @@
     file: document.getElementById("excelFile"),
     fileName: document.getElementById("fileName"),
     analyze: document.getElementById("analyzeBtn"),
+    openLatest: document.getElementById("openLatestBtn"),
     saveImage: document.getElementById("saveImageBtn"),
     print: document.getElementById("printBtn"),
     clear: document.getElementById("clearBtn"),
     help: document.getElementById("helpBtn"),
+    syncStatus: document.getElementById("financeSyncStatus"),
     periodMode: document.getElementById("periodMode"),
     dateFrom: document.getElementById("dateFrom"),
     dateTo: document.getElementById("dateTo"),
@@ -60,10 +62,15 @@
   const state = {
     file: null,
     analysis: null,
+    latestRemote: null,
     visibleRecords: [],
     view: "summary",
-    paymentView: "summary"
+    paymentView: "summary",
+    syncStarted: false
   };
+
+  const FIREBASE_FALLBACK_URL = "https://comercial-norte-default-rtdb.firebaseio.com/";
+  const LATEST_ANALYSIS_CACHE_KEY = "finance_latest_analysis_cache_v1";
 
   const lineChart = new window.FinanceCharts.FinanceChart(
     document.getElementById("flowChart"),
@@ -88,6 +95,80 @@
 
   function setStatus(message, mode) {
     els.status.textContent = message;
+  }
+
+  function setSyncStatus(message, mode) {
+    if (!els.syncStatus) {
+      return;
+    }
+    els.syncStatus.textContent = message;
+    els.syncStatus.classList.remove("ok", "warn", "error");
+    if (mode) {
+      els.syncStatus.classList.add(mode);
+    }
+  }
+
+  function currentUser() {
+    try {
+      return window.parent && window.parent !== window ? window.parent.CURRENT_USER : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function canUseFinanceSync() {
+    const user = currentUser();
+    return !!(user && (user.name === "FINANCEIRO" || user.role === "master"));
+  }
+
+  function firebaseBaseUrl() {
+    try {
+      if (window.parent && window.parent !== window && window.parent.FIREBASE_URL) {
+        return String(window.parent.FIREBASE_URL).replace(/\/+$/, "");
+      }
+    } catch (error) {}
+    return FIREBASE_FALLBACK_URL.replace(/\/+$/, "");
+  }
+
+  function latestAnalysisUrl() {
+    return `${firebaseBaseUrl()}/financeiro/ultimaAnalise.json`;
+  }
+
+  function formatDateTimePtBr(value) {
+    if (!value) {
+      return "";
+    }
+    try {
+      return new Date(value).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function rememberLatest(payload) {
+    state.latestRemote = payload || null;
+    if (els.openLatest) {
+      els.openLatest.disabled = !state.latestRemote;
+    }
+    try {
+      if (payload) {
+        localStorage.setItem(LATEST_ANALYSIS_CACHE_KEY, JSON.stringify(payload));
+      }
+    } catch (error) {}
+  }
+
+  function cachedLatest() {
+    try {
+      return JSON.parse(localStorage.getItem(LATEST_ANALYSIS_CACHE_KEY) || "null");
+    } catch (error) {
+      return null;
+    }
   }
 
   function formatMoney(value) {
@@ -470,6 +551,100 @@
     setStatus(`Análise exibindo ${records.length} registro(s).`, "ok");
   }
 
+  function applyLatestAnalysis(payload, sourceLabel) {
+    if (!payload || !payload.analysis || !Array.isArray(payload.analysis.records)) {
+      setSyncStatus("Nenhuma análise financeira publicada.", "warn");
+      return false;
+    }
+    state.analysis = payload.analysis;
+    state.file = null;
+    els.file.value = "";
+    els.fileName.textContent = payload.fileName ? `Última análise: ${payload.fileName}` : "Última análise publicada";
+    els.analyze.disabled = true;
+    els.periodMode.value = payload.periodMode || "all";
+    els.dateFrom.value = payload.dateFrom || "";
+    els.dateTo.value = payload.dateTo || "";
+    setView("summary");
+    renderAnalysis();
+    const when = formatDateTimePtBr(payload.publishedAt || payload.ts);
+    const who = payload.publishedBy || "FINANCEIRO";
+    const meta = when ? ` por ${who} em ${when}` : ` por ${who}`;
+    setStatus(`Última análise carregada${sourceLabel ? ` (${sourceLabel})` : ""}.`, "ok");
+    setSyncStatus(`Última análise carregada${meta}.`, "ok");
+    return true;
+  }
+
+  async function loadLatestAnalysis(auto) {
+    if (!canUseFinanceSync()) {
+      return;
+    }
+    setSyncStatus("Verificando última análise publicada...", null);
+    try {
+      const resp = await fetch(latestAnalysisUrl(), { cache: "no-store" });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const payload = await resp.json();
+      if (!payload || !payload.analysis) {
+        rememberLatest(null);
+        setSyncStatus("Nenhuma análise financeira publicada ainda.", "warn");
+        return;
+      }
+      rememberLatest(payload);
+      const when = formatDateTimePtBr(payload.publishedAt || payload.ts);
+      const who = payload.publishedBy || "FINANCEIRO";
+      setSyncStatus(`Última análise disponível: ${who}${when ? ` - ${when}` : ""}.`, "ok");
+      if (!auto) {
+        applyLatestAnalysis(payload, "Firebase");
+      }
+    } catch (error) {
+      const cached = cachedLatest();
+      if (cached && cached.analysis) {
+        rememberLatest(cached);
+        setSyncStatus("Firebase indisponível. Última análise em cache disponível.", "warn");
+        if (!auto) {
+          applyLatestAnalysis(cached, "cache local");
+        }
+      } else {
+        rememberLatest(null);
+        setSyncStatus("Offline. Não foi possível buscar a última análise.", "error");
+      }
+    }
+  }
+
+  async function publishLatestAnalysis() {
+    if (!canUseFinanceSync() || !state.analysis) {
+      return;
+    }
+    const user = currentUser() || {};
+    const now = Date.now();
+    const payload = {
+      ts: now,
+      publishedAt: new Date(now).toISOString(),
+      publishedBy: user.name || "FINANCEIRO",
+      fileName: state.file ? state.file.name : "",
+      periodMode: els.periodMode.value || "all",
+      dateFrom: els.dateFrom.value || "",
+      dateTo: els.dateTo.value || "",
+      analysis: JSON.parse(JSON.stringify(state.analysis))
+    };
+    rememberLatest(payload);
+    setSyncStatus("Publicando última análise...", null);
+    try {
+      const resp = await fetch(latestAnalysisUrl(), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      setSyncStatus(`Publicado no Firebase por ${payload.publishedBy}.`, "ok");
+    } catch (error) {
+      setSyncStatus("Salvo local / Firebase indisponível.", "warn");
+    }
+  }
+
   function resetAnalysis() {
     state.analysis = null;
     state.visibleRecords = [];
@@ -533,6 +708,7 @@
       els.dateFrom.value = "";
       els.dateTo.value = "";
       renderAnalysis();
+      await publishLatestAnalysis();
     } catch (error) {
       resetAnalysis();
       els.validation.textContent = error.message || "Nao foi possivel analisar a planilha.";
@@ -611,6 +787,7 @@
   });
 
   els.analyze.addEventListener("click", analyze);
+  els.openLatest.addEventListener("click", () => loadLatestAnalysis(false));
   els.periodMode.addEventListener("change", () => {
     const custom = els.periodMode.value === "custom";
     els.dateFrom.disabled = !custom || !state.analysis;
@@ -651,5 +828,18 @@
     }
   });
 
+  function startFinanceSyncWhenAuthorized() {
+    if (state.syncStarted) {
+      return;
+    }
+    if (!canUseFinanceSync()) {
+      window.setTimeout(startFinanceSyncWhenAuthorized, 700);
+      return;
+    }
+    state.syncStarted = true;
+    loadLatestAnalysis(true);
+  }
+
   resetAnalysis();
+  startFinanceSyncWhenAuthorized();
 }());

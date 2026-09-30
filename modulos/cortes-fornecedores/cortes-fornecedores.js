@@ -498,7 +498,7 @@
     var denied = byId('cortes-denied');
 
     state.currentUser = getCurrentUser();
-    state.canAccess = !!(state.currentUser && state.currentUser.name === 'TRANSFERENCIA');
+    state.canAccess = !!(state.currentUser && (state.currentUser.name === 'TRANSFERENCIA' || state.currentUser.role === 'master'));
 
     if (app) app.classList.toggle('is-hidden', !state.canAccess);
     if (denied) denied.classList.toggle('is-hidden', state.canAccess);

@@ -52,6 +52,34 @@
   justify-content: flex-end;
 }
 
+.finance-sync-status {
+  margin-top: 6px;
+  padding: 4px 6px;
+  border: 1px solid #c8b064;
+  background: #fff8df;
+  color: #4f3100;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.finance-sync-status.ok {
+  border-color: #70a070;
+  background: #e8f7df;
+  color: #1f5b1f;
+}
+
+.finance-sync-status.warn {
+  border-color: #cc9b00;
+  background: #fff2b8;
+  color: #694100;
+}
+
+.finance-sync-status.error {
+  border-color: #cc0000;
+  background: #ffdede;
+  color: #990000;
+}
+
 .period-controls {
   display: grid;
   grid-template-columns: minmax(150px, 1.1fr) minmax(120px, .8fr) minmax(120px, .8fr);

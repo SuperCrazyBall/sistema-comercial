@@ -15,7 +15,7 @@
     <section class="vs-panel access-denied-panel">
       <div class="vs-panel-hd blue">Acesso restrito</div>
       <div class="vs-panel-bd">
-        <p>Esta opção está disponível somente para o usuário FINANCEIRO dentro do sistema principal.</p>
+        <p>Esta opção está disponível somente para os usuários FINANCEIRO e MASTER dentro do sistema principal.</p>
       </div>
     </section>
   </main>
@@ -60,12 +60,14 @@
               </div>
               <div class="vs-actions action-strip">
                 <button id="analyzeBtn" class="vbtn prim" type="button" disabled>Gerar análise</button>
+                <button id="openLatestBtn" class="vbtn" type="button" disabled>Abrir última análise</button>
                 <button id="saveImageBtn" class="vbtn" type="button" disabled>Salvar imagem</button>
                 <button id="printBtn" class="vbtn" type="button" disabled>Imprimir</button>
                 <button id="clearBtn" class="vbtn" type="button">Limpar</button>
                 <button id="helpBtn" class="vbtn help-btn" type="button" title="Ajuda">?</button>
               </div>
             </div>
+            <div id="financeSyncStatus" class="finance-sync-status">Verificando última análise publicada...</div>
           </div>
         </section>
 
@@ -287,7 +289,7 @@
             <li>Em Formas de pagamento, use Resumo para ver grupos gerais ou Detalhado para ver filiais/linhas, sempre separados em recebimentos e pagamentos.</li>
             <li>Passe o mouse nos gráficos para ver os valores e use Salvar imagem ou Imprimir quando precisar.</li>
           </ol>
-          <p>Os dados são processados somente neste computador.</p>
+          <p>A planilha é processada no navegador; somente a análise calculada é salva como última análise no Firebase.</p>
           <div class="vs-actions">
             <button class="vbtn prim" value="ok" type="submit">Entendi</button>
           </div>
@@ -303,7 +305,8 @@
         try {
           allowed = window.parent && window.parent !== window &&
             window.parent.CURRENT_USER &&
-            window.parent.CURRENT_USER.name === "FINANCEIRO";
+            (window.parent.CURRENT_USER.name === "FINANCEIRO" ||
+              window.parent.CURRENT_USER.role === "master");
         } catch (err) {
           allowed = false;
         }

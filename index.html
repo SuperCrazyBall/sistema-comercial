@@ -5658,7 +5658,7 @@ function switchTab(id){
   if (CURRENT_USER && CURRENT_USER.role === 'financeiro' && id !== 'pane-saldos-cheques') {
     id = 'pane-saldos-cheques';
   }
-  if (CURRENT_USER && CURRENT_USER.role !== 'financeiro' && id === 'pane-saldos-cheques') {
+  if (CURRENT_USER && CURRENT_USER.role !== 'financeiro' && CURRENT_USER.role !== 'master' && id === 'pane-saldos-cheques') {
     id = CURRENT_USER.role === 'compras' ? 'pane-cruzamento' : (CURRENT_USER.role === 'viewer' ? 'pane-hist' : 'pane-import');
   }
   // GERENTE não acessa abas operacionais
@@ -5668,7 +5668,7 @@ function switchTab(id){
   if (CURRENT_USER && CURRENT_USER.role === 'compras' && (id === 'pane-import' || id === 'pane-cortes-fornecedores')) {
     id = 'pane-cruzamento';
   }
-  if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA' && id === 'pane-cortes-fornecedores') {
+  if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA' && CURRENT_USER.role !== 'master' && id === 'pane-cortes-fornecedores') {
     id = CURRENT_USER.role === 'compras' ? 'pane-cruzamento' : 'pane-hist';
   }
   document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active');});
@@ -6603,12 +6603,14 @@ function rcSort(th, field) {
 // Usuário GERENTE       (senha 924057): somente leitura
 // Usuário COMPRAS       (senha 836194): leitura + Cruzamento Estoque
 // Usuário FINANCEIRO    (senha 583917): somente Saldos e Cheques
+// Usuário MASTER        (senha 80473169): acesso total/dev
 // ═══════════════════════════════════════════════════════════════
 var USERS = {
   'TRANSFERENCIA': { pw: '492715', role: 'admin'  },
   'GERENTE':       { pw: '924057', role: 'viewer' },
   'COMPRAS':       { pw: '836194', role: 'compras' },
-  'FINANCEIRO':    { pw: '583917', role: 'financeiro' }
+  'FINANCEIRO':    { pw: '583917', role: 'financeiro' },
+  'MASTER':        { pw: '80473169', role: 'master' }
 };
 var SYNC_PFX    = 'vsorc_sync_';
 var CURRENT_USER = null;
@@ -6774,6 +6776,10 @@ function isRestrictedUser() {
   return CURRENT_USER && (CURRENT_USER.role === 'viewer' || CURRENT_USER.role === 'compras' || CURRENT_USER.role === 'financeiro');
 }
 
+function isFullAccessUser() {
+  return CURRENT_USER && (CURRENT_USER.role === 'admin' || CURRENT_USER.role === 'master');
+}
+
 function applyPerms() {
   var tabCortes = document.getElementById('t-cortes-fornecedores');
   var paneCortes = document.getElementById('pane-cortes-fornecedores');
@@ -6787,13 +6793,23 @@ function applyPerms() {
   var paneHist = document.getElementById('pane-hist');
   var tabAna = document.getElementById('t-ana');
   var paneAna = document.getElementById('pane-ana');
-  if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA') {
+  if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA' && CURRENT_USER.role !== 'master') {
     if (tabCortes) tabCortes.style.display = 'none';
     if (paneCortes) paneCortes.style.display = 'none';
   }
-  if (!CURRENT_USER || CURRENT_USER.role !== 'financeiro') {
+  if (!CURRENT_USER || (CURRENT_USER.role !== 'financeiro' && CURRENT_USER.role !== 'master')) {
     if (tabFinanceiro) tabFinanceiro.style.display = 'none';
     if (paneFinanceiro) paneFinanceiro.style.display = 'none';
+  }
+
+  if (CURRENT_USER && CURRENT_USER.role === 'master') {
+    [tabImport, tabCruzamento, tabCortes, tabFinanceiro, tabHist, tabAna].forEach(function(tab) {
+      if (tab) tab.style.display = '';
+    });
+    [paneImport, paneCruzamento, paneCortes, paneFinanceiro, paneHist, paneAna].forEach(function(pane) {
+      if (pane) pane.style.display = '';
+    });
+    return;
   }
 
   if (CURRENT_USER && CURRENT_USER.role === 'financeiro') {
@@ -6941,7 +6957,7 @@ function setSyncSt(state, msg) {
 }
 
 async function pushSync() {
-  if (!CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+  if (!isFullAccessUser()) return;
   setSyncSt('busy', 'Salvando...');
   try {
     var payload = { ts: Date.now(), data: getHist(), user: CURRENT_USER.name };
@@ -6975,7 +6991,7 @@ async function pullSync() {
       fillFils();
       if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
       setSyncSt('ok', 'Atualizado ✓');
-    } else if (CURRENT_USER.role === 'admin' && lastSyncTs > 0) {
+    } else if (isFullAccessUser() && lastSyncTs > 0) {
       // Local mais recente E já sincronizou ao menos uma vez nesta sessão — enviar para nuvem.
       // IMPORTANTE: lastSyncTs===0 significa primeira carga após abertura do sistema;
       // nunca sobrescrevemos o Firebase sem ter recebido ao menos um pull bem-sucedido,
@@ -7000,7 +7016,7 @@ function startSync() {
 var _origSetHistForSync = setHist;
 setHist = function(h) {
   _origSetHistForSync(h);
-  if (CURRENT_USER && CURRENT_USER.role === 'admin') {
+  if (isFullAccessUser()) {
     clearTimeout(setHist._t);
     setHist._t = setTimeout(pushSync, 600);
   }
