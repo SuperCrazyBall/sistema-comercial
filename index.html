@@ -3995,6 +3995,9 @@ tbody tr.row-p {
     <button class="tb-btn" onclick="resetAll()" title="Limpar [Esc]">
       <span class="ic">🚪</span><span class="lb">Esc-Saída</span>
     </button>
+    <button class="tb-btn" id="btn-finance-latest" onclick="openLatestFinanceAnalysis()" title="Abrir última análise financeira" style="display:none;background:rgba(0,51,153,.12)">
+      <span class="ic">💰</span><span class="lb">Últ. Financeiro</span>
+    </button>
     <input type="file" id="file-input" accept=".pdf" style="display:none">
     <div class="tb-logo-wrap">
       <img id="logo-tb" alt="CN" style="height:28px;width:auto">
@@ -5681,6 +5684,35 @@ function switchTab(id){
   if(id==='pane-ana'){fillFils();}
 }
 
+function openLatestFinanceAnalysis(){
+  if (!CURRENT_USER || (CURRENT_USER.role !== 'financeiro' && CURRENT_USER.role !== 'master')) {
+    showPerm();
+    return;
+  }
+  switchTab('pane-saldos-cheques');
+  var tries = 0;
+  function callFrame(){
+    tries++;
+    var frame = document.querySelector('#pane-saldos-cheques iframe');
+    var api = null;
+    try {
+      api = frame && frame.contentWindow && frame.contentWindow.FinanceSaldosCheques;
+    } catch(e) {
+      api = null;
+    }
+    if (api && typeof api.openLatest === 'function') {
+      api.openLatest();
+      return;
+    }
+    if (tries < 20) {
+      setTimeout(callFrame, 150);
+      return;
+    }
+    toast('Módulo financeiro ainda não terminou de carregar.', 'warn');
+  }
+  setTimeout(callFrame, 80);
+}
+
 // ════════════════════════════════════════════════════════════
 // ATALHOS DE TECLADO
 // ════════════════════════════════════════════════════════════
@@ -6793,6 +6825,11 @@ function applyPerms() {
   var paneHist = document.getElementById('pane-hist');
   var tabAna = document.getElementById('t-ana');
   var paneAna = document.getElementById('pane-ana');
+  var btnFinanceLatest = document.getElementById('btn-finance-latest');
+  if (btnFinanceLatest) {
+    btnFinanceLatest.style.display = (CURRENT_USER && (CURRENT_USER.role === 'financeiro' || CURRENT_USER.role === 'master')) ? '' : 'none';
+    btnFinanceLatest.classList.remove('no-perm');
+  }
   if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA' && CURRENT_USER.role !== 'master') {
     if (tabCortes) tabCortes.style.display = 'none';
     if (paneCortes) paneCortes.style.display = 'none';
@@ -6825,6 +6862,10 @@ function applyPerms() {
       btn.classList.add('no-perm');
       btn.style.display = 'none';
     });
+    if (btnFinanceLatest) {
+      btnFinanceLatest.classList.remove('no-perm');
+      btnFinanceLatest.style.display = '';
+    }
     document.querySelectorAll('.tb-sep').forEach(function(sep) {
       sep.style.display = 'none';
     });
