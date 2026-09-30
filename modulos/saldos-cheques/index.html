@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1789b7">
+<title>Controle de Saldos e Cheques</title>
+<link rel="icon" type="image/png" sizes="192x192" href="../../icon-192.png">
+<link rel="apple-touch-icon" href="../../icon-192.png">
+<link rel="stylesheet" href="../../ui-templates/visual-ui-base.css">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <main id="financeDenied" class="vs-shell app-shell">
+    <section class="vs-panel access-denied-panel">
+      <div class="vs-panel-hd blue">Acesso restrito</div>
+      <div class="vs-panel-bd">
+        <p>Esta opção está disponível somente para o usuário FINANCEIRO dentro do sistema principal.</p>
+      </div>
+    </section>
+  </main>
+
+  <main id="financeApp" class="vs-shell app-shell" hidden>
+    <section class="vs-panel app-panel">
+      <div class="vs-panel-hd blue">Módulo Financeiro</div>
+      <div class="vs-panel-bd">
+        <header class="vs-title-row module-title">
+          <div>
+            <h1>Controle de Saldos e Cheques</h1>
+            <p>Importe a planilha diária e gere uma visão objetiva de entradas, saídas e saldo.</p>
+          </div>
+          <div class="vs-status" id="statusBox">Aguardando arquivo Excel.</div>
+        </header>
+
+        <section class="vs-panel">
+          <div class="vs-panel-hd">Importação e ações</div>
+          <div class="vs-panel-bd">
+            <div class="toolbar-grid">
+              <label class="file-box" for="excelFile">
+                <span class="file-label">Arquivo Excel</span>
+                <input id="excelFile" class="vs-input" type="file" accept=".xlsx,.xlsm">
+                <span id="fileName" class="file-name">Nenhum arquivo selecionado</span>
+              </label>
+              <div class="period-controls">
+                <label>
+                  Período
+                  <select id="periodMode" class="vs-input" disabled>
+                    <option value="all">Todos os registros</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                </label>
+                <label>
+                  De
+                  <input id="dateFrom" class="vs-input" type="date" disabled>
+                </label>
+                <label>
+                  Até
+                  <input id="dateTo" class="vs-input" type="date" disabled>
+                </label>
+              </div>
+              <div class="vs-actions action-strip">
+                <button id="analyzeBtn" class="vbtn prim" type="button" disabled>Gerar análise</button>
+                <button id="saveImageBtn" class="vbtn" type="button" disabled>Salvar imagem</button>
+                <button id="printBtn" class="vbtn" type="button" disabled>Imprimir</button>
+                <button id="clearBtn" class="vbtn" type="button">Limpar</button>
+                <button id="helpBtn" class="vbtn help-btn" type="button" title="Ajuda">?</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="analysisArea" class="analysis-area" aria-live="polite">
+          <section class="vs-panel summary-panel">
+            <div class="vs-panel-hd summary-hd">
+              <span id="summaryTitle">Resumo do período</span>
+              <span class="view-toggle">
+                <button id="summaryViewBtn" class="toggle-btn active" type="button">Resumo</button>
+                <button id="detailViewBtn" class="toggle-btn" type="button">Detalhamento</button>
+              </span>
+            </div>
+            <div class="vs-panel-bd">
+              <div id="summaryView" class="summary-grid">
+                <article class="metric">
+                  <span>Total de entradas</span>
+                  <strong id="totalEntries">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Total de saídas</span>
+                  <strong id="totalExits">R$ 0,00</strong>
+                </article>
+                <article class="metric balance">
+                  <span>Saldo do período</span>
+                  <strong id="periodBalance">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Dias positivos</span>
+                  <strong id="positiveDays">0</strong>
+                </article>
+                <article class="metric">
+                  <span>Dias negativos</span>
+                  <strong id="negativeDays">0</strong>
+                </article>
+                <article class="metric">
+                  <span>Maior saldo positivo</span>
+                  <strong id="bestBalance">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Maior saldo negativo</span>
+                  <strong id="worstBalance">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Registros analisados</span>
+                  <strong id="recordCount">0</strong>
+                </article>
+              </div>
+              <div id="detailView" class="detail-grid" hidden>
+                <article class="metric">
+                  <span>Período selecionado</span>
+                  <strong id="selectedPeriod">Todos</strong>
+                </article>
+                <article class="metric">
+                  <span>Média de entradas</span>
+                  <strong id="avgEntries">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Média de saídas</span>
+                  <strong id="avgExits">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Média de saldo</span>
+                  <strong id="avgBalance">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Maior entrada</span>
+                  <strong id="topEntry">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Maior saída</span>
+                  <strong id="topExit">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Melhor dia/período</span>
+                  <strong id="bestDetail">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Pior dia/período</span>
+                  <strong id="worstDetail">R$ 0,00</strong>
+                </article>
+              </div>
+              <div id="validationMessage" class="validation-message">Importe uma planilha para iniciar.</div>
+            </div>
+          </section>
+
+          <section class="vs-panel payment-panel">
+            <div class="vs-panel-hd summary-hd">
+              <span>Formas de pagamento</span>
+              <span class="view-toggle">
+                <button id="paymentSummaryBtn" class="toggle-btn active" type="button">Resumo</button>
+                <button id="paymentDetailBtn" class="toggle-btn" type="button">Detalhado</button>
+              </span>
+            </div>
+            <div class="vs-panel-bd">
+              <div class="payment-kpis split-kpis">
+                <article class="metric">
+                  <span>Recebimentos</span>
+                  <strong id="paymentReceiptsTotal">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Pagamentos</span>
+                  <strong id="paymentPaymentsTotal">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Principal entrada</span>
+                  <strong id="paymentTopMethod">R$ 0,00</strong>
+                </article>
+                <article class="metric">
+                  <span>Maior pagamento</span>
+                  <strong id="paymentTopPayment">R$ 0,00</strong>
+                </article>
+              </div>
+
+              <div class="payment-split">
+                <section class="payment-box receipt-box">
+                  <div class="payment-box-title">Recebimentos por forma</div>
+                  <div class="payment-chart-wrap">
+                    <canvas id="receiptChart" width="680" height="320"></canvas>
+                  </div>
+                  <div class="vs-table-wrap payment-table-wrap">
+                    <table class="vs-table data-table payment-data-table">
+                      <thead>
+                        <tr>
+                          <th id="receiptLabelHeader">Forma</th>
+                          <th class="num">Valor</th>
+                          <th class="num">Participação</th>
+                        </tr>
+                      </thead>
+                      <tbody id="receiptBody">
+                        <tr>
+                          <td colspan="3">Nenhuma análise gerada.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="payment-box payout-box">
+                  <div class="payment-box-title">Pagamentos por origem</div>
+                  <div class="payment-chart-wrap">
+                    <canvas id="payoutChart" width="680" height="320"></canvas>
+                  </div>
+                  <div class="vs-table-wrap payment-table-wrap">
+                    <table class="vs-table data-table payment-data-table">
+                      <thead>
+                        <tr>
+                          <th id="payoutLabelHeader">Origem</th>
+                          <th class="num">Valor</th>
+                          <th class="num">Participação</th>
+                        </tr>
+                      </thead>
+                      <tbody id="payoutBody">
+                        <tr>
+                          <td colspan="3">Nenhuma análise gerada.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <section class="vs-panel chart-panel">
+              <div class="vs-panel-hd">Entradas x Saídas</div>
+              <div class="chart-wrap">
+                <canvas id="flowChart" width="940" height="330"></canvas>
+              </div>
+            </section>
+
+            <section class="vs-panel chart-panel">
+              <div class="vs-panel-hd">Resultado Diário - Positivo x Negativo</div>
+              <div class="chart-wrap">
+                <canvas id="resultChart" width="940" height="330"></canvas>
+              </div>
+            </section>
+          </section>
+
+          <section class="vs-panel table-panel">
+            <div class="vs-panel-hd">Últimos registros analisados</div>
+            <div class="vs-panel-bd table-pad">
+              <div class="vs-table-wrap">
+                <table class="vs-table data-table">
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th class="num">Entradas</th>
+                      <th class="num">Saídas</th>
+                      <th class="num">Saldo</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recordsBody">
+                    <tr>
+                      <td colspan="4">Nenhuma análise gerada.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="tooltip" class="chart-tooltip" hidden></div>
+
+  <dialog id="helpDialog" class="help-dialog">
+    <form method="dialog">
+      <div class="vs-panel help-panel">
+        <div class="vs-panel-hd blue">Ajuda rápida</div>
+        <div class="vs-panel-bd help-content">
+          <ol>
+            <li>Selecione a planilha do dia no campo Arquivo Excel.</li>
+            <li>Clique em Gerar análise para ler a aba Fluxo.</li>
+            <li>Use o campo Período para ver todos os registros ou escolher uma data inicial e final.</li>
+            <li>Alterne entre Resumo e Detalhamento para conferir os totais ou indicadores do recorte.</li>
+            <li>Em Formas de pagamento, use Resumo para ver grupos gerais ou Detalhado para ver filiais/linhas, sempre separados em recebimentos e pagamentos.</li>
+            <li>Passe o mouse nos gráficos para ver os valores e use Salvar imagem ou Imprimir quando precisar.</li>
+          </ol>
+          <p>Os dados são processados somente neste computador.</p>
+          <div class="vs-actions">
+            <button class="vbtn prim" value="ok" type="submit">Entendi</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    (function () {
+      function refreshAccess() {
+        var allowed = false;
+        try {
+          allowed = window.parent && window.parent !== window &&
+            window.parent.CURRENT_USER &&
+            window.parent.CURRENT_USER.name === "FINANCEIRO";
+        } catch (err) {
+          allowed = false;
+        }
+        var app = document.getElementById("financeApp");
+        var denied = document.getElementById("financeDenied");
+        if (app) app.hidden = !allowed;
+        if (denied) denied.hidden = allowed;
+      }
+      refreshAccess();
+      window.setInterval(refreshAccess, 1000);
+    }());
+  </script>
+  <script src="assets/vendor/jszip.min.js"></script>
+  <script src="src/xlsx-parser.js"></script>
+  <script src="src/charts.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>

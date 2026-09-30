@@ -4010,6 +4010,7 @@ tbody tr.row-p {
     <div class="tab-btn active" id="t-import" onclick="switchTab('pane-import')">📋 Pedido de Venda</div>
     <div class="tab-btn" id="t-cruzamento" onclick="switchTab('pane-cruzamento')">⇄ Cruzamento Estoque</div>
     <div class="tab-btn" id="t-cortes-fornecedores" onclick="switchTab('pane-cortes-fornecedores')">🏭 Cortes Fornecedores</div>
+    <div class="tab-btn" id="t-saldos-cheques" onclick="switchTab('pane-saldos-cheques')">💰 Saldos e Cheques</div>
     <div class="tab-btn" id="t-hist" onclick="switchTab('pane-hist')">🗂 Histórico</div>
     <div class="tab-btn" id="t-ana" onclick="switchTab('pane-ana')">📈 Relatórios Analíticos</div>
   </div>
@@ -4221,6 +4222,15 @@ tbody tr.row-p {
       <iframe
         title="Cortes Fornecedores"
         src="modulos/cortes-fornecedores/index.html"
+        style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
+      </iframe>
+    </div>
+
+    <!-- ── ABA: SALDOS E CHEQUES ── -->
+    <div id="pane-saldos-cheques" class="pane">
+      <iframe
+        title="Saldos e Cheques"
+        src="modulos/saldos-cheques/index.html"
         style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
       </iframe>
     </div>
@@ -5645,6 +5655,12 @@ function cpCod(c){navigator.clipboard.writeText(c).then(function(){toast('📋 '
 // ABAS
 // ════════════════════════════════════════════════════════════
 function switchTab(id){
+  if (CURRENT_USER && CURRENT_USER.role === 'financeiro' && id !== 'pane-saldos-cheques') {
+    id = 'pane-saldos-cheques';
+  }
+  if (CURRENT_USER && CURRENT_USER.role !== 'financeiro' && id === 'pane-saldos-cheques') {
+    id = CURRENT_USER.role === 'compras' ? 'pane-cruzamento' : (CURRENT_USER.role === 'viewer' ? 'pane-hist' : 'pane-import');
+  }
   // GERENTE não acessa abas operacionais
   if (CURRENT_USER && CURRENT_USER.role === 'viewer' && (id === 'pane-import' || id === 'pane-cruzamento' || id === 'pane-cortes-fornecedores')) {
     id = 'pane-hist';
@@ -5658,7 +5674,7 @@ function switchTab(id){
   document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active');});
   var pane = document.getElementById(id);
   if (pane) pane.classList.add('active');
-  var map={'pane-import':'t-import','pane-cruzamento':'t-cruzamento','pane-cortes-fornecedores':'t-cortes-fornecedores','pane-hist':'t-hist','pane-ana':'t-ana'};
+  var map={'pane-import':'t-import','pane-cruzamento':'t-cruzamento','pane-cortes-fornecedores':'t-cortes-fornecedores','pane-saldos-cheques':'t-saldos-cheques','pane-hist':'t-hist','pane-ana':'t-ana'};
   document.querySelectorAll('.tab-btn').forEach(function(t){t.classList.remove('active');});
   if(map[id]){var tb=document.getElementById(map[id]);if(tb)tb.classList.add('active');}
   if(id==='pane-hist'){fillFils();renderHist();}
@@ -6586,11 +6602,13 @@ function rcSort(th, field) {
 // Usuário TRANSFERENCIA (senha 492715): acesso total
 // Usuário GERENTE       (senha 924057): somente leitura
 // Usuário COMPRAS       (senha 836194): leitura + Cruzamento Estoque
+// Usuário FINANCEIRO    (senha 583917): somente Saldos e Cheques
 // ═══════════════════════════════════════════════════════════════
 var USERS = {
   'TRANSFERENCIA': { pw: '492715', role: 'admin'  },
   'GERENTE':       { pw: '924057', role: 'viewer' },
-  'COMPRAS':       { pw: '836194', role: 'compras' }
+  'COMPRAS':       { pw: '836194', role: 'compras' },
+  'FINANCEIRO':    { pw: '583917', role: 'financeiro' }
 };
 var SYNC_PFX    = 'vsorc_sync_';
 var CURRENT_USER = null;
@@ -6723,11 +6741,17 @@ function doLogin() {
   el = document.getElementById('seg-op');   if (el) el.textContent = 'Operador : ' + uname;
   el = document.getElementById('seg-user'); if (el) { el.textContent = uname; el.style.background='#1A4A9A'; el.style.color='#FFF'; el.style.fontWeight='bold'; }
   // Inicializar app
-  fillFils(); renderHist(); updStats();
+  if (CURRENT_USER.role !== 'financeiro') {
+    fillFils(); renderHist(); updStats();
+  }
   // Permissões visuais
   applyPerms();
   // Sincronização
-  startSync();
+  if (CURRENT_USER.role !== 'financeiro') {
+    startSync();
+  } else {
+    setSyncSt('ok', 'Financeiro');
+  }
   toast('\u2714 Bem-vindo, ' + uname + '!', 'ok');
 }
 
@@ -6747,15 +6771,49 @@ var VIEWER_OK = {
 };
 
 function isRestrictedUser() {
-  return CURRENT_USER && (CURRENT_USER.role === 'viewer' || CURRENT_USER.role === 'compras');
+  return CURRENT_USER && (CURRENT_USER.role === 'viewer' || CURRENT_USER.role === 'compras' || CURRENT_USER.role === 'financeiro');
 }
 
 function applyPerms() {
   var tabCortes = document.getElementById('t-cortes-fornecedores');
   var paneCortes = document.getElementById('pane-cortes-fornecedores');
+  var tabFinanceiro = document.getElementById('t-saldos-cheques');
+  var paneFinanceiro = document.getElementById('pane-saldos-cheques');
+  var tabImport = document.getElementById('t-import');
+  var paneImport = document.getElementById('pane-import');
+  var tabCruzamento = document.getElementById('t-cruzamento');
+  var paneCruzamento = document.getElementById('pane-cruzamento');
+  var tabHist = document.getElementById('t-hist');
+  var paneHist = document.getElementById('pane-hist');
+  var tabAna = document.getElementById('t-ana');
+  var paneAna = document.getElementById('pane-ana');
   if (CURRENT_USER && CURRENT_USER.name !== 'TRANSFERENCIA') {
     if (tabCortes) tabCortes.style.display = 'none';
     if (paneCortes) paneCortes.style.display = 'none';
+  }
+  if (!CURRENT_USER || CURRENT_USER.role !== 'financeiro') {
+    if (tabFinanceiro) tabFinanceiro.style.display = 'none';
+    if (paneFinanceiro) paneFinanceiro.style.display = 'none';
+  }
+
+  if (CURRENT_USER && CURRENT_USER.role === 'financeiro') {
+    [tabImport, tabCruzamento, tabCortes, tabHist, tabAna].forEach(function(tab) {
+      if (tab) tab.style.display = 'none';
+    });
+    [paneImport, paneCruzamento, paneCortes, paneHist, paneAna].forEach(function(pane) {
+      if (pane) pane.style.display = 'none';
+    });
+    if (tabFinanceiro) tabFinanceiro.style.display = '';
+    if (paneFinanceiro) paneFinanceiro.style.display = '';
+    document.querySelectorAll('.tb-btn').forEach(function(btn) {
+      btn.classList.add('no-perm');
+      btn.style.display = 'none';
+    });
+    document.querySelectorAll('.tb-sep').forEach(function(sep) {
+      sep.style.display = 'none';
+    });
+    switchTab('pane-saldos-cheques');
+    return;
   }
 
   if (!isRestrictedUser()) return;
@@ -6770,10 +6828,6 @@ function applyPerms() {
   });
 
   // GERENTE: ocultar aba "Pedido de Venda" e redirecionar para Histórico
-  var tabImport = document.getElementById('t-import');
-  var paneImport = document.getElementById('pane-import');
-  var tabCruzamento = document.getElementById('t-cruzamento');
-  var paneCruzamento = document.getElementById('pane-cruzamento');
   if (tabCortes) tabCortes.style.display = 'none';
   if (paneCortes) paneCortes.style.display = 'none';
   if (tabImport) tabImport.style.display = 'none';
@@ -6831,6 +6885,13 @@ document.addEventListener('drop', function(e) {
 document.addEventListener('keydown', function(e) {
   if (!isRestrictedUser()) return;
   if (e.target && (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
+  if (CURRENT_USER && CURRENT_USER.role === 'financeiro') {
+    var financeBlocked = /^F\d+$/.test(e.key) || ['s','S','p','P','c','C','Escape','ArrowDown','ArrowUp'].indexOf(e.key) >= 0;
+    if (financeBlocked) {
+      e.stopImmediatePropagation(); e.preventDefault(); showPerm();
+    }
+    return;
+  }
   var blocked = ['F1','F2','F3','F8','F9','s','S','p','P','c','C','Escape'];
   if (blocked.indexOf(e.key) >= 0) {
     e.stopImmediatePropagation(); e.preventDefault(); showPerm();
