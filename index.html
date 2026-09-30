@@ -6784,7 +6784,7 @@ function doLogin() {
   if (CURRENT_USER.role !== 'financeiro') {
     startSync();
   } else {
-    setSyncSt('ok', 'Financeiro');
+    setSyncSt('busy', 'Verificando...');
   }
   toast('\u2714 Bem-vindo, ' + uname + '!', 'ok');
 }

@@ -300,6 +300,7 @@
 
   <script>
     (function () {
+      var wasAllowed = false;
       function refreshAccess() {
         var allowed = false;
         try {
@@ -314,6 +315,10 @@
         var denied = document.getElementById("financeDenied");
         if (app) app.hidden = !allowed;
         if (denied) denied.hidden = allowed;
+        if (allowed && !wasAllowed && window.FinanceSaldosCheques && typeof window.FinanceSaldosCheques.redraw === "function") {
+          window.FinanceSaldosCheques.redraw();
+        }
+        wasAllowed = allowed;
       }
       refreshAccess();
       window.setInterval(refreshAccess, 1000);

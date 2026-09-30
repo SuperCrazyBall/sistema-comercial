@@ -98,14 +98,29 @@
   }
 
   function setSyncStatus(message, mode) {
-    if (!els.syncStatus) {
-      return;
+    if (els.syncStatus) {
+      els.syncStatus.textContent = message;
+      els.syncStatus.classList.remove("ok", "warn", "error");
+      if (mode) {
+        els.syncStatus.classList.add(mode);
+      }
     }
-    els.syncStatus.textContent = message;
-    els.syncStatus.classList.remove("ok", "warn", "error");
-    if (mode) {
-      els.syncStatus.classList.add(mode);
-    }
+    updateParentFinanceSyncStatus(message, mode);
+  }
+
+  function updateParentFinanceSyncStatus(message, mode) {
+    try {
+      const parentWindow = window.parent && window.parent !== window ? window.parent : null;
+      const parentUser = parentWindow && parentWindow.CURRENT_USER;
+      if (!parentWindow || !parentUser || parentUser.role !== "financeiro" || typeof parentWindow.setSyncSt !== "function") {
+        return;
+      }
+      const parentMode = mode === "error" ? "err" : (mode === "ok" || mode === "warn" ? "ok" : "busy");
+      const parentMessage = String(message || "")
+        .replace(/^Última análise:\s*/i, "")
+        .replace(/\.$/, "");
+      parentWindow.setSyncSt(parentMode, parentMessage || "Sincronizado");
+    } catch (error) {}
   }
 
   function currentUser() {
@@ -215,10 +230,8 @@
       lineChart.draw(records);
       barChart.draw(records);
     };
-    window.requestAnimationFrame(() => {
-      redraw();
-      window.setTimeout(redraw, 120);
-      window.setTimeout(redraw, 360);
+    [0, 120, 360, 800, 1400, 2200].forEach((delay) => {
+      window.setTimeout(() => window.requestAnimationFrame(redraw), delay);
     });
   }
 
