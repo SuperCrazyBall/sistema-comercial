@@ -143,6 +143,41 @@
     };
   }
 
+  function normalizeOperatorName(value) {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  function normalizeRole(role, operatorName) {
+    var normalized = String(role || '').trim().toLowerCase();
+    var operator = normalizeOperatorName(operatorName);
+
+    if (normalized === 'master') return 'master';
+    if (normalized === 'financeiro') return 'financeiro';
+    if (normalized === 'compras') return 'compras';
+    if (normalized === 'viewer' || normalized === 'gerente') return 'viewer';
+    if (normalized === 'admin' || normalized === 'transferencia') return 'admin';
+    if (operator === 'MASTER') return 'master';
+    if (operator === 'FINANCEIRO') return 'financeiro';
+    if (operator === 'COMPRAS') return 'compras';
+    if (operator === 'GERENTE') return 'viewer';
+    if (operator === 'TRANSFERENCIA') return 'admin';
+    return normalized || 'viewer';
+  }
+
+  function normalizeProfile(row, fallbackOperatorName) {
+    var operatorName = normalizeOperatorName(
+      row && (row.operator_name || row.operator || row.name || row.usuario || row.user)
+    ) || normalizeOperatorName(fallbackOperatorName);
+
+    return {
+      id: row && row.id ? row.id : '',
+      appUserId: row && row.app_user_id ? row.app_user_id : null,
+      name: operatorName,
+      role: normalizeRole(row && row.role, operatorName),
+      raw: row || null
+    };
+  }
+
   function getJson(url) {
     return fetch(url, { cache: 'no-store' }).then(assertOk).then(function (response) {
       return response.json();
@@ -335,6 +370,60 @@
     });
   }
 
+  function getCurrentProfile(fallbackOperatorName) {
+    var userId = supabaseSession && supabaseSession.userId;
+    var path;
+
+    if (!userId) {
+      return Promise.reject(new Error('Sessão Supabase ausente.'));
+    }
+    path = 'app_profiles?select=*&id=eq.' + encodeURIComponent(userId) + '&limit=1';
+    return fetch(supabaseUrl(path), {
+      method: 'GET',
+      headers: supabaseHeaders()
+    }).then(assertOk).then(function (response) {
+      return response.json();
+    }).then(function (rows) {
+      var row = Array.isArray(rows) ? rows[0] : null;
+
+      if (!row) {
+        throw new Error('Perfil não encontrado em app_profiles.');
+      }
+      return normalizeProfile(row, fallbackOperatorName);
+    });
+  }
+
+  function authenticateOperator(operatorName, password) {
+    return signInSupabase(operatorName, password).then(function (auth) {
+      if (!auth.ok) return auth;
+      return getCurrentProfile(operatorName).then(function (profile) {
+        var expected = normalizeOperatorName(operatorName);
+
+        if (profile.name && expected && profile.name !== expected) {
+          signOutSupabase();
+          return {
+            ok: false,
+            configured: true,
+            status: 403,
+            message: 'Usuário autenticado não corresponde ao operador informado.',
+            profile: profile
+          };
+        }
+        return Object.assign({}, auth, {
+          profile: profile
+        });
+      }).catch(function (err) {
+        signOutSupabase();
+        return {
+          ok: false,
+          configured: true,
+          status: 403,
+          message: err && err.message ? err.message : 'Não foi possível carregar app_profiles.'
+        };
+      });
+    });
+  }
+
   function signOutSupabase() {
     saveSupabaseSession(null);
     return Promise.resolve({ ok: true });
@@ -368,6 +457,10 @@
     testSupabaseConnection: testSupabaseConnection,
 
     signInSupabase: signInSupabase,
+
+    authenticateOperator: authenticateOperator,
+
+    getCurrentProfile: getCurrentProfile,
 
     signOutSupabase: signOutSupabase,
 
