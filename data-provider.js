@@ -160,7 +160,7 @@
 
   function testSupabaseConnection() {
     var table = 'app_profiles';
-    var path = table + '?select=app_user_id,operator_name,role&limit=1';
+    var path = table + '?select=*&limit=1';
 
     if (!supabaseConfigured()) {
       return Promise.resolve({
@@ -182,7 +182,7 @@
           status: response.status,
           statusText: response.statusText,
           table: table,
-          authHint: response.ok ? 'Conexão REST funcionando.' : 'Conexão chegou ao Supabase, mas Auth/RLS pode ter bloqueado.',
+          authHint: response.ok ? 'Conexão REST funcionando.' : 'Conexão chegou ao Supabase, mas tabela, Auth ou RLS pode ter bloqueado.',
           body: body
         };
       });
