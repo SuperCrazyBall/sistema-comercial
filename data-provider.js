@@ -264,6 +264,156 @@
     return ACTIVE_BACKEND === 'supabase';
   }
 
+  function payloadSummary(payload) {
+    var data = payload && payload.data;
+    var analysis = payload && payload.analysis;
+    var uiSnapshot = payload && payload.uiSnapshot;
+    var memory = data || {};
+
+    return {
+      exists: !!payload,
+      ts: payload && payload.ts ? payload.ts : null,
+      user: payload && (payload.user || payload.publishedBy) ? (payload.user || payload.publishedBy) : '',
+      historicoItems: Array.isArray(data) ? data.length : null,
+      supplierCount: Array.isArray(memory.suppliers) ? memory.suppliers.length : null,
+      supplierCodeRules: Array.isArray(memory.codeRules) ? memory.codeRules.length : (memory.codeRules ? Object.keys(memory.codeRules).length : null),
+      supplierAliasRules: Array.isArray(memory.aliasRules) ? memory.aliasRules.length : (memory.aliasRules ? Object.keys(memory.aliasRules).length : null),
+      supplierTokenRules: Array.isArray(memory.tokenRules) ? memory.tokenRules.length : (memory.tokenRules ? Object.keys(memory.tokenRules).length : null),
+      supplierIgnoredWarnings: Array.isArray(memory.ignoredWarnings) ? memory.ignoredWarnings.length : (memory.ignoredWarnings ? Object.keys(memory.ignoredWarnings).length : null),
+      financeRecords: analysis && Array.isArray(analysis.records) ? analysis.records.length : null,
+      financePaymentDays: analysis && analysis.paymentFlow && Array.isArray(analysis.paymentFlow.daily) ? analysis.paymentFlow.daily.length : null,
+      financeSnapshotRecords: uiSnapshot && Array.isArray(uiSnapshot.records) ? uiSnapshot.records.length : null
+    };
+  }
+
+  function getFirebaseHistorico(syncKey) {
+    return getJson(firebaseUrl(historicoPath(syncKey)));
+  }
+
+  function saveFirebaseHistorico(syncKey, payload) {
+    return putJson(firebaseUrl(historicoPath(syncKey)), payload);
+  }
+
+  function getFirebaseSupplierMemory() {
+    return getJson(firebaseUrl('/usuarios/transferencia/cortesFornecedoresMemoria.json'));
+  }
+
+  function saveFirebaseSupplierMemory(payload) {
+    return putJson(firebaseUrl('/usuarios/transferencia/cortesFornecedoresMemoria.json'), payload);
+  }
+
+  function getFirebaseFinanceLatest() {
+    return getJson(firebaseUrl('/financeiro/ultimaAnalise.json'));
+  }
+
+  function saveFirebaseFinanceLatest(payload) {
+    return putJson(firebaseUrl('/financeiro/ultimaAnalise.json'), payload);
+  }
+
+  function getSupabaseHistorico(syncKey) {
+    return getSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+      keyValue: syncKey || SUPABASE_TABLES.historico.keyValue
+    }));
+  }
+
+  function saveSupabaseHistorico(syncKey, payload) {
+    return saveSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+      keyValue: syncKey || SUPABASE_TABLES.historico.keyValue
+    }), payload);
+  }
+
+  function getSupabaseSupplierMemory() {
+    return getSupabaseSingleton(SUPABASE_TABLES.supplierMemory);
+  }
+
+  function saveSupabaseSupplierMemory(payload) {
+    return saveSupabaseSingleton(SUPABASE_TABLES.supplierMemory, payload);
+  }
+
+  function getSupabaseFinanceLatest() {
+    return getSupabaseSingleton(SUPABASE_TABLES.financeLatest);
+  }
+
+  function saveSupabaseFinanceLatest(payload) {
+    return saveSupabaseSingleton(SUPABASE_TABLES.financeLatest, payload);
+  }
+
+  function readFirebaseSnapshot() {
+    return Promise.all([
+      getFirebaseHistorico('transferencia').catch(function (err) { return { error: err.message }; }),
+      getFirebaseSupplierMemory().catch(function (err) { return { error: err.message }; }),
+      getFirebaseFinanceLatest().catch(function (err) { return { error: err.message }; })
+    ]).then(function (items) {
+      return {
+        historico: items[0],
+        supplierMemory: items[1],
+        financeLatest: items[2]
+      };
+    });
+  }
+
+  function readSupabaseSnapshot() {
+    return Promise.all([
+      getSupabaseHistorico('transferencia').catch(function (err) { return { error: err.message }; }),
+      getSupabaseSupplierMemory().catch(function (err) { return { error: err.message }; }),
+      getSupabaseFinanceLatest().catch(function (err) { return { error: err.message }; })
+    ]).then(function (items) {
+      return {
+        historico: items[0],
+        supplierMemory: items[1],
+        financeLatest: items[2]
+      };
+    });
+  }
+
+  function snapshotSummary(snapshot) {
+    return {
+      historico: snapshot && snapshot.historico && snapshot.historico.error ? { error: snapshot.historico.error } : payloadSummary(snapshot && snapshot.historico),
+      supplierMemory: snapshot && snapshot.supplierMemory && snapshot.supplierMemory.error ? { error: snapshot.supplierMemory.error } : payloadSummary(snapshot && snapshot.supplierMemory),
+      financeLatest: snapshot && snapshot.financeLatest && snapshot.financeLatest.error ? { error: snapshot.financeLatest.error } : payloadSummary(snapshot && snapshot.financeLatest)
+    };
+  }
+
+  function previewFirebaseMigration() {
+    return Promise.all([
+      readFirebaseSnapshot(),
+      readSupabaseSnapshot()
+    ]).then(function (snapshots) {
+      return {
+        activeBackend: ACTIVE_BACKEND,
+        firebase: snapshotSummary(snapshots[0]),
+        supabase: snapshotSummary(snapshots[1]),
+        nextStep: 'Se o Firebase estiver preenchido e o Supabase estiver vazio/desatualizado, rode ComercialDataProvider.migrateFirebaseToSupabase().'
+      };
+    });
+  }
+
+  function migrateFirebaseToSupabase() {
+    return readFirebaseSnapshot().then(function (snapshot) {
+      var result = {
+        historico: null,
+        supplierMemory: null,
+        financeLatest: null
+      };
+
+      return saveSupabaseHistorico('transferencia', snapshot.historico).then(function () {
+        result.historico = payloadSummary(snapshot.historico);
+        return saveSupabaseSupplierMemory(snapshot.supplierMemory);
+      }).then(function () {
+        result.supplierMemory = payloadSummary(snapshot.supplierMemory);
+        return saveSupabaseFinanceLatest(snapshot.financeLatest);
+      }).then(function () {
+        result.financeLatest = payloadSummary(snapshot.financeLatest);
+        return {
+          ok: true,
+          migratedAt: new Date().toISOString(),
+          result: result,
+          rollback: 'Firebase não foi alterado. Para rollback, mantenha ACTIVE_BACKEND=firebase.'
+        };
+      });
+    });
+  }
+
   function testSupabaseConnection() {
     var table = 'app_profiles';
     var path = table + '?select=*&limit=1';
@@ -456,6 +606,10 @@
 
     testSupabaseConnection: testSupabaseConnection,
 
+    previewFirebaseMigration: previewFirebaseMigration,
+
+    migrateFirebaseToSupabase: migrateFirebaseToSupabase,
+
     signInSupabase: signInSupabase,
 
     authenticateOperator: authenticateOperator,
@@ -466,48 +620,44 @@
 
     getHistorico: function (syncKey) {
       if (useSupabase()) {
-        return getSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
-          keyValue: syncKey || SUPABASE_TABLES.historico.keyValue
-        }));
+        return getSupabaseHistorico(syncKey);
       }
-      return getJson(firebaseUrl(historicoPath(syncKey)));
+      return getFirebaseHistorico(syncKey);
     },
 
     saveHistorico: function (syncKey, payload) {
       if (useSupabase()) {
-        return saveSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
-          keyValue: syncKey || SUPABASE_TABLES.historico.keyValue
-        }), payload);
+        return saveSupabaseHistorico(syncKey, payload);
       }
-      return putJson(firebaseUrl(historicoPath(syncKey)), payload);
+      return saveFirebaseHistorico(syncKey, payload);
     },
 
     getSupplierMemory: function () {
       if (useSupabase()) {
-        return getSupabaseSingleton(SUPABASE_TABLES.supplierMemory);
+        return getSupabaseSupplierMemory();
       }
-      return getJson(firebaseUrl('/usuarios/transferencia/cortesFornecedoresMemoria.json'));
+      return getFirebaseSupplierMemory();
     },
 
     saveSupplierMemory: function (payload) {
       if (useSupabase()) {
-        return saveSupabaseSingleton(SUPABASE_TABLES.supplierMemory, payload);
+        return saveSupabaseSupplierMemory(payload);
       }
-      return putJson(firebaseUrl('/usuarios/transferencia/cortesFornecedoresMemoria.json'), payload);
+      return saveFirebaseSupplierMemory(payload);
     },
 
     getFinanceLatest: function () {
       if (useSupabase()) {
-        return getSupabaseSingleton(SUPABASE_TABLES.financeLatest);
+        return getSupabaseFinanceLatest();
       }
-      return getJson(firebaseUrl('/financeiro/ultimaAnalise.json'));
+      return getFirebaseFinanceLatest();
     },
 
     saveFinanceLatest: function (payload) {
       if (useSupabase()) {
-        return saveSupabaseSingleton(SUPABASE_TABLES.financeLatest, payload);
+        return saveSupabaseFinanceLatest(payload);
       }
-      return putJson(firebaseUrl('/financeiro/ultimaAnalise.json'), payload);
+      return saveFirebaseFinanceLatest(payload);
     }
   };
 
