@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.70</div>
+    <div class="seg">Vrs.: 2.0.0.71</div>
   </div>
 
 </div><!-- /win -->
@@ -4411,8 +4411,8 @@ tbody tr.row-p {
 
 <div id="toast"></div>
 
-<script src="supabase-config.js?v=2.0.0.70"></script>
-<script src="data-provider.js?v=2.0.0.70"></script>
+<script src="supabase-config.js?v=2.0.0.71"></script>
+<script src="data-provider.js?v=2.0.0.71"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -6751,12 +6751,13 @@ function lgiPassKey(e) {
   }
 }
 
-function doLogin() {
+async function doLogin() {
   var uEl  = document.getElementById('lgi-user');
   var pEl  = document.getElementById('lgi-pass');
   var errEl = document.getElementById('lgi-err');
   var uname = (uEl.value || '').trim().toUpperCase();
   var pw    = _lgiPassRaw || '';
+  var supabaseAuth = null;
   errEl.textContent = '';
   if (!uname || !pw) { errEl.textContent = 'Informe usu\u00e1rio e senha.'; return; }
   var ud = USERS[uname];
@@ -6764,6 +6765,13 @@ function doLogin() {
     errEl.textContent = 'Usu\u00e1rio ou senha inv\u00e1lidos.';
     _lgiPassRaw = '';
     pEl.value = ''; pEl.focus(); return;
+  }
+  if (window.ComercialDataProvider && window.ComercialDataProvider.supabaseConfigured()) {
+    errEl.textContent = 'Validando Supabase...';
+    supabaseAuth = await window.ComercialDataProvider.signInSupabase(uname, pw);
+    if (!supabaseAuth.ok) {
+      console.warn('Supabase Auth pendente:', supabaseAuth);
+    }
   }
   // Login OK
   CURRENT_USER = { name: uname, role: ud.role };
@@ -6788,7 +6796,13 @@ function doLogin() {
   } else {
     setSyncSt('busy', 'Verificando...');
   }
-  toast('\u2714 Bem-vindo, ' + uname + '!', 'ok');
+  if (supabaseAuth && supabaseAuth.ok) {
+    toast('\u2714 Bem-vindo, ' + uname + '! Supabase conectado.', 'ok');
+  } else if (supabaseAuth && !supabaseAuth.ok) {
+    toast('\u2714 Bem-vindo, ' + uname + '! Supabase Auth pendente.', 'warn');
+  } else {
+    toast('\u2714 Bem-vindo, ' + uname + '!', 'ok');
+  }
 }
 
 function lgiCancel() {

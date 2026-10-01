@@ -7,6 +7,8 @@
     url: '',
     anonKey: ''
   };
+  var SUPABASE_AUTH_STORAGE_KEY = 'comercial_supabase_auth_v1';
+  var supabaseSession = loadSupabaseSession();
 
   var SUPABASE_TABLES = {
     historico: {
@@ -42,7 +44,24 @@
     return cleanBaseUrl(SUPABASE_CONFIG.url) + '/rest/v1/' + String(path || '').replace(/^\/+/, '');
   }
 
+  function supabaseAuthUrl(path) {
+    return cleanBaseUrl(SUPABASE_CONFIG.url) + '/auth/v1/' + String(path || '').replace(/^\/+/, '');
+  }
+
   function supabaseHeaders(extraHeaders) {
+    var headers = {
+      apikey: SUPABASE_CONFIG.anonKey,
+      Authorization: 'Bearer ' + ((supabaseSession && supabaseSession.access_token) || SUPABASE_CONFIG.anonKey),
+      'Content-Type': 'application/json'
+    };
+
+    Object.keys(extraHeaders || {}).forEach(function (key) {
+      headers[key] = extraHeaders[key];
+    });
+    return headers;
+  }
+
+  function supabaseAnonHeaders(extraHeaders) {
     var headers = {
       apikey: SUPABASE_CONFIG.anonKey,
       Authorization: 'Bearer ' + SUPABASE_CONFIG.anonKey,
@@ -70,6 +89,51 @@
         return text;
       }
     });
+  }
+
+  function loadSupabaseSession() {
+    var raw;
+
+    try {
+      raw = window.localStorage ? window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY) : '';
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function saveSupabaseSession(session) {
+    supabaseSession = session || null;
+    try {
+      if (!window.localStorage) return;
+      if (supabaseSession) {
+        window.localStorage.setItem(SUPABASE_AUTH_STORAGE_KEY, JSON.stringify(supabaseSession));
+      } else {
+        window.localStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
+      }
+    } catch (err) {}
+  }
+
+  function supabaseEmailForOperator(operatorName) {
+    var name = String(operatorName || '').trim().toUpperCase();
+    var configured = SUPABASE_CONFIG.authEmails || {};
+
+    if (configured[name]) return configured[name];
+    return name.toLowerCase() + '@comercial.local';
+  }
+
+  function safeSessionInfo() {
+    if (!supabaseSession) {
+      return {
+        signedIn: false
+      };
+    }
+    return {
+      signedIn: true,
+      email: supabaseSession.email || '',
+      userId: supabaseSession.userId || '',
+      expiresAt: supabaseSession.expires_at || null
+    };
   }
 
   function getJson(url) {
@@ -196,6 +260,79 @@
     });
   }
 
+  function signInSupabase(operatorName, password) {
+    var email = supabaseEmailForOperator(operatorName);
+
+    if (!supabaseConfigured()) {
+      return Promise.resolve({
+        ok: false,
+        configured: false,
+        skipped: true,
+        message: 'Supabase ainda não configurado.'
+      });
+    }
+
+    return fetch(supabaseAuthUrl('token?grant_type=password'), {
+      method: 'POST',
+      headers: supabaseAnonHeaders(),
+      body: JSON.stringify({
+        email: email,
+        password: password
+      })
+    }).then(function (response) {
+      return responseText(response).then(function (bodyText) {
+        var body;
+
+        try {
+          body = JSON.parse(bodyText || '{}');
+        } catch (err) {
+          body = {};
+        }
+        if (!response.ok || !body.access_token) {
+          saveSupabaseSession(null);
+          return {
+            ok: false,
+            configured: true,
+            status: response.status,
+            email: email,
+            message: body.msg || body.message || 'Supabase Auth não autenticou este usuário.',
+            body: bodyText
+          };
+        }
+        saveSupabaseSession({
+          access_token: body.access_token,
+          refresh_token: body.refresh_token || '',
+          expires_at: body.expires_at || (Date.now() + ((body.expires_in || 3600) * 1000)),
+          token_type: body.token_type || 'bearer',
+          email: email,
+          operatorName: String(operatorName || '').trim().toUpperCase(),
+          userId: body.user && body.user.id ? body.user.id : ''
+        });
+        return {
+          ok: true,
+          configured: true,
+          status: response.status,
+          email: email,
+          userId: body.user && body.user.id ? body.user.id : ''
+        };
+      });
+    }).catch(function (err) {
+      saveSupabaseSession(null);
+      return {
+        ok: false,
+        configured: true,
+        status: 0,
+        email: email,
+        message: err && err.message ? err.message : 'Não foi possível autenticar no Supabase.'
+      };
+    });
+  }
+
+  function signOutSupabase() {
+    saveSupabaseSession(null);
+    return Promise.resolve({ ok: true });
+  }
+
   var provider = {
     backend: function () {
       return ACTIVE_BACKEND;
@@ -207,7 +344,7 @@
         firebaseUrl: FIREBASE_BASE_URL,
         supabaseConfigured: supabaseConfigured(),
         supabaseUrl: SUPABASE_CONFIG.url ? cleanBaseUrl(SUPABASE_CONFIG.url) : '',
-        supabaseAuth: 'pendente',
+        supabaseAuth: safeSessionInfo(),
         supabaseTables: {
           historico: SUPABASE_TABLES.historico.table,
           supplierMemory: SUPABASE_TABLES.supplierMemory.table,
@@ -221,6 +358,10 @@
     supabaseConfigured: supabaseConfigured,
 
     testSupabaseConnection: testSupabaseConnection,
+
+    signInSupabase: signInSupabase,
+
+    signOutSupabase: signOutSupabase,
 
     getHistorico: function (syncKey) {
       if (useSupabase()) {
