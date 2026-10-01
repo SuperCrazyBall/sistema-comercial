@@ -13,18 +13,18 @@
   var SUPABASE_TABLES = {
     historico: {
       table: 'historico_usuarios',
-      keyColumn: 'id',
-      keyValue: 'transferencia'
+      keyColumn: '',
+      keyValue: ''
     },
     supplierMemory: {
       table: 'cortes_fornecedores_memoria',
-      keyColumn: 'id',
-      keyValue: 'transferencia'
+      keyColumn: '',
+      keyValue: ''
     },
     financeLatest: {
       table: 'financeiro_ultima_analise',
-      keyColumn: 'id',
-      keyValue: 'ultima'
+      keyColumn: '',
+      keyValue: ''
     }
   };
 
@@ -83,7 +83,9 @@
 
   function assertOk(response) {
     if (!response.ok) {
-      throw new Error('HTTP ' + response.status);
+      return responseText(response).then(function (body) {
+        throw new Error('HTTP ' + response.status + (body ? ' - ' + body : ''));
+      });
     }
     return response;
   }
@@ -215,13 +217,8 @@
       updated_at: new Date().toISOString()
     };
 
-    row[config.keyColumn] = config.keyValue;
-    if (payload && payload.user) {
-      row.user = payload.user;
-      row.usuario = payload.user;
-    }
-    if (payload && Object.prototype.hasOwnProperty.call(payload, 'data')) {
-      row.data = payload.data;
+    if (config.keyColumn) {
+      row[config.keyColumn] = config.keyValue;
     }
     return row;
   }
@@ -232,10 +229,12 @@
     if (!supabaseConfigured()) {
       return Promise.reject(new Error('Supabase não configurado.'));
     }
-    path = config.table
-      + '?select=*'
-      + '&' + encodeURIComponent(config.keyColumn) + '=eq.' + encodeURIComponent(config.keyValue)
-      + '&limit=1';
+    path = config.table + '?select=*&limit=1';
+    if (config.keyColumn) {
+      path += '&' + encodeURIComponent(config.keyColumn) + '=eq.' + encodeURIComponent(config.keyValue);
+    } else {
+      path += '&order=updated_at.desc';
+    }
 
     return fetch(supabaseUrl(path), {
       method: 'GET',
@@ -253,7 +252,7 @@
     }
     return fetch(supabaseUrl(config.table), {
       method: 'POST',
-      headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      headers: supabaseHeaders({ Prefer: config.keyColumn ? 'resolution=merge-duplicates,return=minimal' : 'return=minimal' }),
       body: JSON.stringify(payloadToRow(config, payload))
     }).then(assertOk).then(function () {
       return payload;
