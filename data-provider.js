@@ -62,6 +62,16 @@
     return response;
   }
 
+  function responseText(response) {
+    return response.text().then(function (text) {
+      try {
+        return JSON.stringify(JSON.parse(text));
+      } catch (err) {
+        return text;
+      }
+    });
+  }
+
   function getJson(url) {
     return fetch(url, { cache: 'no-store' }).then(assertOk).then(function (response) {
       return response.json();
@@ -148,6 +158,44 @@
     return ACTIVE_BACKEND === 'supabase';
   }
 
+  function testSupabaseConnection() {
+    var table = 'app_profiles';
+    var path = table + '?select=app_user_id,operator_name,role&limit=1';
+
+    if (!supabaseConfigured()) {
+      return Promise.resolve({
+        ok: false,
+        configured: false,
+        status: 0,
+        message: 'Supabase ainda não configurado. Preencha supabase-config.js.'
+      });
+    }
+
+    return fetch(supabaseUrl(path), {
+      method: 'GET',
+      headers: supabaseHeaders()
+    }).then(function (response) {
+      return responseText(response).then(function (body) {
+        return {
+          ok: response.ok,
+          configured: true,
+          status: response.status,
+          statusText: response.statusText,
+          table: table,
+          authHint: response.ok ? 'Conexão REST funcionando.' : 'Conexão chegou ao Supabase, mas Auth/RLS pode ter bloqueado.',
+          body: body
+        };
+      });
+    }).catch(function (err) {
+      return {
+        ok: false,
+        configured: true,
+        status: 0,
+        message: err && err.message ? err.message : 'Não foi possível conectar ao Supabase.'
+      };
+    });
+  }
+
   var provider = {
     backend: function () {
       return ACTIVE_BACKEND;
@@ -159,6 +207,7 @@
         firebaseUrl: FIREBASE_BASE_URL,
         supabaseConfigured: supabaseConfigured(),
         supabaseUrl: SUPABASE_CONFIG.url ? cleanBaseUrl(SUPABASE_CONFIG.url) : '',
+        supabaseAuth: 'pendente',
         supabaseTables: {
           historico: SUPABASE_TABLES.historico.table,
           supplierMemory: SUPABASE_TABLES.supplierMemory.table,
@@ -170,6 +219,8 @@
     firebaseUrl: firebaseUrl,
 
     supabaseConfigured: supabaseConfigured,
+
+    testSupabaseConnection: testSupabaseConnection,
 
     getHistorico: function (syncKey) {
       if (useSupabase()) {
