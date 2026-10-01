@@ -13,18 +13,21 @@
   var SUPABASE_TABLES = {
     historico: {
       table: 'historico_usuarios',
-      keyColumn: '',
-      keyValue: ''
+      keyColumn: 'sync_key',
+      keyValue: 'transferencia',
+      kind: 'data'
     },
     supplierMemory: {
       table: 'cortes_fornecedores_memoria',
-      keyColumn: '',
-      keyValue: ''
+      keyColumn: 'sync_key',
+      keyValue: 'transferencia',
+      kind: 'data'
     },
     financeLatest: {
       table: 'financeiro_ultima_analise',
-      keyColumn: '',
-      keyValue: ''
+      keyColumn: 'id',
+      keyValue: 'ultima',
+      kind: 'finance'
     }
   };
 
@@ -203,20 +206,54 @@
   function rowToPayload(row) {
     if (!row) return null;
     if (row.payload && typeof row.payload === 'object') return row.payload;
+    if (Object.prototype.hasOwnProperty.call(row, 'analysis') || Object.prototype.hasOwnProperty.call(row, 'ui_snapshot')) {
+      return {
+        schemaVersion: row.schema_version || 2,
+        ts: row.ts || 0,
+        publishedAt: row.published_at || null,
+        publishedBy: row.published_by || '',
+        fileName: row.file_name || '',
+        periodMode: row.period_mode || 'all',
+        dateFrom: row.date_from || '',
+        dateTo: row.date_to || '',
+        analysis: row.analysis || null,
+        uiSnapshot: row.ui_snapshot || null
+      };
+    }
     return {
       ts: row.ts || row.updated_ts || 0,
-      user: row.user || row.usuario || row.updated_by || '',
+      user: row.user_name || row.user || row.usuario || row.updated_by || '',
       data: row.data == null ? null : row.data
     };
   }
 
   function payloadToRow(config, payload) {
-    var row = {
-      payload: payload,
-      ts: payload && payload.ts ? payload.ts : Date.now(),
+    var row;
+
+    payload = payload || {};
+    if (config.kind === 'finance') {
+      row = {
+        id: config.keyValue,
+        ts: payload.ts || Date.now(),
+        published_at: payload.publishedAt || null,
+        published_by: payload.publishedBy || '',
+        file_name: payload.fileName || '',
+        period_mode: payload.periodMode || 'all',
+        date_from: payload.dateFrom || null,
+        date_to: payload.dateTo || null,
+        schema_version: payload.schemaVersion || 2,
+        analysis: payload.analysis || {},
+        ui_snapshot: payload.uiSnapshot || {},
+        updated_at: new Date().toISOString()
+      };
+      return row;
+    }
+    row = {
+      ts: payload.ts || Date.now(),
+      user_name: payload.user || '',
+      data: Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : {},
       updated_at: new Date().toISOString()
     };
-
     if (config.keyColumn) {
       row[config.keyColumn] = config.keyValue;
     }
@@ -250,7 +287,7 @@
     if (!supabaseConfigured()) {
       return Promise.reject(new Error('Supabase não configurado.'));
     }
-    return fetch(supabaseUrl(config.table), {
+    return fetch(supabaseUrl(config.table + (config.keyColumn ? '?on_conflict=' + encodeURIComponent(config.keyColumn) : '')), {
       method: 'POST',
       headers: supabaseHeaders({ Prefer: config.keyColumn ? 'resolution=merge-duplicates,return=minimal' : 'return=minimal' }),
       body: JSON.stringify(payloadToRow(config, payload))
