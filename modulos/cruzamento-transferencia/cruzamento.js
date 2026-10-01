@@ -150,7 +150,7 @@
 
   function cruzamentoCanAccess(user) {
     if (!user) return false;
-    return user.role === 'admin' || user.role === 'compras' || user.name === 'TRANSFERENCIA' || user.name === 'COMPRAS';
+    return user.role === 'admin' || user.role === 'master' || user.role === 'compras' || user.name === 'TRANSFERENCIA' || user.name === 'MASTER' || user.name === 'COMPRAS';
   }
 
   function cruzamentoSetVisible(el, visible) {

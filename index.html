@@ -4215,7 +4215,7 @@ tbody tr.row-p {
     <div id="pane-cruzamento" class="pane">
       <iframe
         title="Cruzamento Estoque/Ruptura"
-        src="modulos/cruzamento-transferencia/index.html"
+        src="modulos/cruzamento-transferencia/index.html?v=2.0.0.78"
         style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
       </iframe>
     </div>
@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.77</div>
+    <div class="seg">Vrs.: 2.0.0.78</div>
   </div>
 
 </div><!-- /win -->
@@ -4411,8 +4411,8 @@ tbody tr.row-p {
 
 <div id="toast"></div>
 
-<script src="supabase-config.js?v=2.0.0.77"></script>
-<script src="data-provider.js?v=2.0.0.77"></script>
+<script src="supabase-config.js?v=2.0.0.78"></script>
+<script src="data-provider.js?v=2.0.0.78"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -7010,6 +7010,8 @@ async function pushSync() {
     setSyncSt('ok', 'Sincronizado ✓');
   } catch(e) {
     // Fallback: salva só localmente
+    window.__lastHistoricoSyncError = e;
+    console.warn('Falha ao salvar historico no backend remoto. Mantendo cache local.', e);
     setSyncSt('ok', 'Salvo local ✓');
   }
 }
@@ -7036,6 +7038,8 @@ async function pullSync() {
       setSyncSt('ok', 'Sincronizado ✓');
     }
   } catch(e) {
+    window.__lastHistoricoSyncError = e;
+    console.warn('Falha ao verificar historico no backend remoto.', e);
     setSyncSt('err', 'Offline');
   }
 }
