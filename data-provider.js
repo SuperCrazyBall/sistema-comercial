@@ -3,7 +3,7 @@
 
   var FIREBASE_BASE_URL = 'https://comercial-norte-default-rtdb.firebaseio.com/';
   var ACTIVE_BACKEND = 'firebase';
-  var SUPABASE_CONFIG = window.SUPABASE_CONFIG || {
+  var DEFAULT_SUPABASE_CONFIG = {
     url: '',
     anonKey: ''
   };
@@ -36,22 +36,28 @@
     return cleanBaseUrl(FIREBASE_BASE_URL) + '/' + String(path || '').replace(/^\/+/, '');
   }
 
+  function supabaseConfig() {
+    return window.SUPABASE_CONFIG || DEFAULT_SUPABASE_CONFIG;
+  }
+
   function supabaseConfigured() {
-    return !!(SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey);
+    var config = supabaseConfig();
+    return !!(config.url && config.anonKey);
   }
 
   function supabaseUrl(path) {
-    return cleanBaseUrl(SUPABASE_CONFIG.url) + '/rest/v1/' + String(path || '').replace(/^\/+/, '');
+    return cleanBaseUrl(supabaseConfig().url) + '/rest/v1/' + String(path || '').replace(/^\/+/, '');
   }
 
   function supabaseAuthUrl(path) {
-    return cleanBaseUrl(SUPABASE_CONFIG.url) + '/auth/v1/' + String(path || '').replace(/^\/+/, '');
+    return cleanBaseUrl(supabaseConfig().url) + '/auth/v1/' + String(path || '').replace(/^\/+/, '');
   }
 
   function supabaseHeaders(extraHeaders) {
+    var config = supabaseConfig();
     var headers = {
-      apikey: SUPABASE_CONFIG.anonKey,
-      Authorization: 'Bearer ' + ((supabaseSession && supabaseSession.access_token) || SUPABASE_CONFIG.anonKey),
+      apikey: config.anonKey,
+      Authorization: 'Bearer ' + ((supabaseSession && supabaseSession.access_token) || config.anonKey),
       'Content-Type': 'application/json'
     };
 
@@ -62,9 +68,10 @@
   }
 
   function supabaseAnonHeaders(extraHeaders) {
+    var config = supabaseConfig();
     var headers = {
-      apikey: SUPABASE_CONFIG.anonKey,
-      Authorization: 'Bearer ' + SUPABASE_CONFIG.anonKey,
+      apikey: config.anonKey,
+      Authorization: 'Bearer ' + config.anonKey,
       'Content-Type': 'application/json'
     };
 
@@ -116,7 +123,7 @@
 
   function supabaseEmailForOperator(operatorName) {
     var name = String(operatorName || '').trim().toUpperCase();
-    var configured = SUPABASE_CONFIG.authEmails || {};
+    var configured = supabaseConfig().authEmails || {};
 
     if (configured[name]) return configured[name];
     return name.toLowerCase() + '@comercial.local';
@@ -343,7 +350,8 @@
         backend: ACTIVE_BACKEND,
         firebaseUrl: FIREBASE_BASE_URL,
         supabaseConfigured: supabaseConfigured(),
-        supabaseUrl: SUPABASE_CONFIG.url ? cleanBaseUrl(SUPABASE_CONFIG.url) : '',
+        supabaseUrl: supabaseConfig().url ? cleanBaseUrl(supabaseConfig().url) : '',
+        supabaseConfigKeys: Object.keys(supabaseConfig().authEmails || {}),
         supabaseAuth: safeSessionInfo(),
         supabaseTables: {
           historico: SUPABASE_TABLES.historico.table,
