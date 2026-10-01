@@ -244,6 +244,45 @@
     return firebaseBaseUrl().replace(/\/+$/, '') + MEMORY_SYNC_PATH;
   }
 
+  function dataProvider() {
+    try {
+      if (window.parent && window.parent !== window && window.parent.ComercialDataProvider) {
+        return window.parent.ComercialDataProvider;
+      }
+    } catch (err) {
+      // Ignore parent access issues.
+    }
+    return null;
+  }
+
+  function fetchRemoteMemory() {
+    var provider = dataProvider();
+
+    if (provider && typeof provider.getSupplierMemory === 'function') {
+      return provider.getSupplierMemory();
+    }
+    return fetch(memorySyncUrl() + '?_=' + Date.now()).then(function (resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    });
+  }
+
+  function saveRemoteMemory(payload) {
+    var provider = dataProvider();
+
+    if (provider && typeof provider.saveSupplierMemory === 'function') {
+      return provider.saveSupplierMemory(payload);
+    }
+    return fetch(memorySyncUrl(), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return payload;
+    });
+  }
+
   function memoryHasContent(memory) {
     memory = normalizeMemory(memory);
     return memory.suppliers.length > 0
@@ -283,12 +322,7 @@
       user: state.currentUser ? state.currentUser.name : 'TRANSFERENCIA',
       data: memoryToRemote(state.memory)
     };
-    return fetch(memorySyncUrl(), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function (resp) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return saveRemoteMemory(payload).then(function () {
       state.memoryLastSyncTs = payload.ts;
       state.memorySyncPending = false;
       setMemoryStatus('Sincronizado', 'ok');
@@ -325,10 +359,7 @@
     state.memorySyncBusy = true;
     localBefore = normalizeMemory(state.memory);
     setMemoryStatus('Verificando...', 'busy');
-    return fetch(memorySyncUrl() + '?_=' + Date.now()).then(function (resp) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return resp.json();
-    }).then(function (remote) {
+    return fetchRemoteMemory().then(function (remote) {
       var remoteMemory;
       var merged;
       var remoteJson;

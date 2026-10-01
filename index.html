@@ -4224,7 +4224,7 @@ tbody tr.row-p {
     <div id="pane-cortes-fornecedores" class="pane">
       <iframe
         title="Cortes Fornecedores"
-        src="modulos/cortes-fornecedores/index.html"
+        src="modulos/cortes-fornecedores/index.html?v=2.0.0.67"
         style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
       </iframe>
     </div>
@@ -4233,7 +4233,7 @@ tbody tr.row-p {
     <div id="pane-saldos-cheques" class="pane">
       <iframe
         title="Saldos e Cheques"
-        src="modulos/saldos-cheques/index.html?v=2.0.0.66"
+        src="modulos/saldos-cheques/index.html?v=2.0.0.67"
         style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
       </iframe>
     </div>
@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.66</div>
+    <div class="seg">Vrs.: 2.0.0.67</div>
   </div>
 
 </div><!-- /win -->
@@ -4411,6 +4411,7 @@ tbody tr.row-p {
 
 <div id="toast"></div>
 
+<script src="data-provider.js?v=2.0.0.67"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -6980,10 +6981,10 @@ delDirect      = _wrap('delDirect',      delDirect);
 startEdit      = _wrap('startEdit',      startEdit);
 updHistVlUnit  = _wrap('updHistVlUnit',  updHistVlUnit);
 
-// ── SINCRONIZAÇÃO FIREBASE REALTIME DATABASE ────────────────
-// Banco de dados em tempo real — funciona em qualquer computador
-// Firebase Realtime DB (plano gratuito Spark — sem custo)
-var FIREBASE_URL = 'https://comercial-norte-default-rtdb.firebaseio.com/';
+// ── SINCRONIZAÇÃO REMOTA ────────────────────────────────────
+// Hoje a camada de dados usa Firebase por baixo. Na migração, trocaremos
+// essa implementação central sem espalhar mudanças pelo sistema inteiro.
+var FIREBASE_URL = window.FIREBASE_URL || 'https://comercial-norte-default-rtdb.firebaseio.com/';
 
 function syncKey() {
   // Both users share the same data store (TRANSFERENCIA writes, GERENTE reads)
@@ -7002,13 +7003,7 @@ async function pushSync() {
   setSyncSt('busy', 'Salvando...');
   try {
     var payload = { ts: Date.now(), data: getHist(), user: CURRENT_USER.name };
-    var url = FIREBASE_URL + '/usuarios/' + syncKey() + '/historico.json';
-    var resp = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    await window.ComercialDataProvider.saveHistorico(syncKey(), payload);
     lastSyncTs = payload.ts;
     setSyncSt('ok', 'Sincronizado ✓');
   } catch(e) {
@@ -7021,10 +7016,7 @@ async function pullSync() {
   if (!CURRENT_USER) return;
   setSyncSt('busy', 'Verificando...');
   try {
-    var url = FIREBASE_URL + '/usuarios/' + syncKey() + '/historico.json';
-    var resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var remote = await resp.json();
+    var remote = await window.ComercialDataProvider.getHistorico(syncKey());
     if (remote && remote.ts && remote.ts > lastSyncTs) {
       // Dados remotos mais recentes — atualizar local
       localStorage.setItem(STORE_KEY, JSON.stringify(remote.data || []));

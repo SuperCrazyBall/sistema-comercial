@@ -72,7 +72,7 @@
     syncTimer: null
   };
 
-  const FINANCE_MODULE_VERSION = "2.0.0.66";
+  const FINANCE_MODULE_VERSION = "2.0.0.67";
   const FIREBASE_FALLBACK_URL = "https://comercial-norte-default-rtdb.firebaseio.com/";
   const LATEST_ANALYSIS_CACHE_KEY = "finance_latest_analysis_cache_v2";
   const DATE_MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -179,6 +179,43 @@
 
   function latestAnalysisUrl() {
     return `${firebaseBaseUrl()}/financeiro/ultimaAnalise.json`;
+  }
+
+  function dataProvider() {
+    try {
+      if (window.parent && window.parent !== window && window.parent.ComercialDataProvider) {
+        return window.parent.ComercialDataProvider;
+      }
+    } catch (error) {}
+    return null;
+  }
+
+  async function fetchLatestAnalysisPayload() {
+    const provider = dataProvider();
+    if (provider && typeof provider.getFinanceLatest === "function") {
+      return provider.getFinanceLatest();
+    }
+    const resp = await fetch(latestAnalysisUrl(), { cache: "no-store" });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    return resp.json();
+  }
+
+  async function saveLatestAnalysisPayload(payload) {
+    const provider = dataProvider();
+    if (provider && typeof provider.saveFinanceLatest === "function") {
+      return provider.saveFinanceLatest(payload);
+    }
+    const resp = await fetch(latestAnalysisUrl(), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    return payload;
   }
 
   function formatDateTimePtBr(value) {
@@ -954,11 +991,7 @@
     const available = restoreCachedLatest();
     setSyncStatus("Verificando última análise publicada...", null);
     try {
-      const resp = await fetch(latestAnalysisUrl(), { cache: "no-store" });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      const payload = normalizeLatestPayload(await resp.json());
+      const payload = normalizeLatestPayload(await fetchLatestAnalysisPayload());
       if (!payload || !Array.isArray(payload.analysis?.records)) {
         if (available) {
           setSyncStatus(latestMetaText(available), "ok");
@@ -1015,14 +1048,7 @@
     state.latestAppliedTs = payload.ts;
     setSyncStatus("Publicando última análise...", null);
     try {
-      const resp = await fetch(latestAnalysisUrl(), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
+      await saveLatestAnalysisPayload(payload);
       setSyncStatus(`Publicado no Firebase por ${payload.publishedBy}.`, "ok");
     } catch (error) {
       setSyncStatus("Salvo local / Firebase indisponível.", "warn");
