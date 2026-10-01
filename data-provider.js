@@ -17,6 +17,12 @@
       keyValue: 'transferencia',
       kind: 'data'
     },
+    historicoItems: {
+      table: 'historico_orcamentos',
+      keyColumn: 'sync_key',
+      keyValue: 'transferencia',
+      kind: 'historicoItems'
+    },
     supplierMemory: {
       table: 'cortes_fornecedores_memoria',
       keyColumn: 'sync_key',
@@ -227,6 +233,33 @@
     };
   }
 
+  function historicoItemFromRow(row) {
+    var item = row && row.data && typeof row.data === 'object' ? row.data : {};
+
+    if (!item.id && row && row.id) item.id = row.id;
+    if (!item.numero && row && row.numero) item.numero = row.numero;
+    if (!item.filial && row && row.filial) item.filial = row.filial;
+    if (!item.createdAt && row && row.record_created_at) item.createdAt = row.record_created_at;
+    if (!item.savedAt && row && row.saved_at) item.savedAt = row.saved_at;
+    return item;
+  }
+
+  function historicoItemToRow(syncKey, item, userName, deletedAt) {
+    item = item || {};
+    return {
+      sync_key: syncKey || SUPABASE_TABLES.historico.keyValue,
+      id: String(item.id || Date.now()),
+      numero: item.numero || '',
+      filial: item.filial || '',
+      record_created_at: item.createdAt || item.savedAt || null,
+      saved_at: item.savedAt || item.createdAt || new Date().toISOString(),
+      deleted_at: deletedAt || null,
+      user_name: userName || '',
+      data: item,
+      updated_at: new Date().toISOString()
+    };
+  }
+
   function payloadToRow(config, payload) {
     var row;
 
@@ -296,6 +329,193 @@
     });
   }
 
+  function isMissingHistoricoItemsTable(err) {
+    return !!(err && /historico_orcamentos|schema cache|PGRST20|PGRST205|Could not find/i.test(String(err.message || err)));
+  }
+
+  function getSupabaseHistoricoItems(syncKey) {
+    var key = syncKey || SUPABASE_TABLES.historico.keyValue;
+    var path;
+
+    if (!supabaseConfigured()) {
+      return Promise.reject(new Error('Supabase não configurado.'));
+    }
+
+    path = SUPABASE_TABLES.historicoItems.table
+      + '?select=*&sync_key=eq.' + encodeURIComponent(key)
+      + '&deleted_at=is.null&order=saved_at.desc';
+
+    return fetch(supabaseUrl(path), {
+      method: 'GET',
+      headers: supabaseHeaders()
+    }).then(assertOk).then(function (response) {
+      return response.json();
+    }).then(function (rows) {
+      var data = Array.isArray(rows) ? rows.map(historicoItemFromRow) : [];
+      var ts = 0;
+
+      (Array.isArray(rows) ? rows : []).forEach(function (row) {
+        var raw = row && (row.updated_at || row.saved_at || row.created_at);
+        var parsed = raw ? Date.parse(raw) : 0;
+        if (parsed > ts) ts = parsed;
+      });
+      return {
+        ts: ts || Date.now(),
+        user: '',
+        data: data
+      };
+    }).catch(function (err) {
+      if (isMissingHistoricoItemsTable(err)) {
+        return getSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+          keyValue: key
+        }));
+      }
+      throw err;
+    });
+  }
+
+  function saveSupabaseHistoricoItem(syncKey, item, userName) {
+    var key = syncKey || SUPABASE_TABLES.historico.keyValue;
+    var row = historicoItemToRow(key, item, userName || '');
+
+    if (!supabaseConfigured()) {
+      return Promise.reject(new Error('Supabase não configurado.'));
+    }
+
+    return fetch(supabaseUrl(SUPABASE_TABLES.historicoItems.table + '?on_conflict=sync_key,id'), {
+      method: 'POST',
+      headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(row)
+    }).then(assertOk).then(function () {
+      return item;
+    }).catch(function (err) {
+      if (isMissingHistoricoItemsTable(err)) {
+        return getSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+          keyValue: key
+        })).then(function (payload) {
+          var data = payload && Array.isArray(payload.data) ? payload.data : [];
+          var idx = data.findIndex(function (existing) { return existing && item && existing.id === item.id; });
+
+          if (idx >= 0) data[idx] = item;
+          else data.unshift(item);
+          return saveSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+            keyValue: key
+          }), {
+            ts: Date.now(),
+            user: userName || '',
+            data: data
+          });
+        });
+      }
+      throw err;
+    });
+  }
+
+  function deleteSupabaseHistoricoItem(syncKey, id, userName) {
+    var key = syncKey || SUPABASE_TABLES.historico.keyValue;
+    var body = {
+      deleted_at: new Date().toISOString(),
+      user_name: userName || '',
+      updated_at: new Date().toISOString()
+    };
+    var path = SUPABASE_TABLES.historicoItems.table
+      + '?sync_key=eq.' + encodeURIComponent(key)
+      + '&id=eq.' + encodeURIComponent(id);
+
+    if (!supabaseConfigured()) {
+      return Promise.reject(new Error('Supabase não configurado.'));
+    }
+
+    return fetch(supabaseUrl(path), {
+      method: 'PATCH',
+      headers: supabaseHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify(body)
+    }).then(assertOk).then(function () {
+      return { id: id };
+    }).catch(function (err) {
+      if (isMissingHistoricoItemsTable(err)) {
+        return getSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+          keyValue: key
+        })).then(function (payload) {
+          var data = payload && Array.isArray(payload.data) ? payload.data : [];
+
+          return saveSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+            keyValue: key
+          }), {
+            ts: Date.now(),
+            user: userName || '',
+            data: data.filter(function (item) { return item && item.id !== id; })
+          });
+        });
+      }
+      throw err;
+    });
+  }
+
+  function clearSupabaseHistoricoItems(syncKey, userName) {
+    var key = syncKey || SUPABASE_TABLES.historico.keyValue;
+    var body = {
+      deleted_at: new Date().toISOString(),
+      user_name: userName || '',
+      updated_at: new Date().toISOString()
+    };
+    var path = SUPABASE_TABLES.historicoItems.table
+      + '?sync_key=eq.' + encodeURIComponent(key)
+      + '&deleted_at=is.null';
+
+    if (!supabaseConfigured()) {
+      return Promise.reject(new Error('Supabase não configurado.'));
+    }
+
+    return fetch(supabaseUrl(path), {
+      method: 'PATCH',
+      headers: supabaseHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify(body)
+    }).then(assertOk).then(function () {
+      return { ok: true };
+    }).catch(function (err) {
+      if (isMissingHistoricoItemsTable(err)) {
+        return saveSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+          keyValue: key
+        }), {
+          ts: Date.now(),
+          user: userName || '',
+          data: []
+        });
+      }
+      throw err;
+    });
+  }
+
+  function saveSupabaseHistoricoItems(syncKey, payload) {
+    var key = syncKey || SUPABASE_TABLES.historico.keyValue;
+    var data = payload && Array.isArray(payload.data) ? payload.data : [];
+    var userName = payload && payload.user ? payload.user : '';
+    var rows = data.map(function (item) {
+      return historicoItemToRow(key, item, userName);
+    });
+
+    if (!rows.length) return Promise.resolve(payload);
+    if (!supabaseConfigured()) {
+      return Promise.reject(new Error('Supabase não configurado.'));
+    }
+
+    return fetch(supabaseUrl(SUPABASE_TABLES.historicoItems.table + '?on_conflict=sync_key,id'), {
+      method: 'POST',
+      headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(rows)
+    }).then(assertOk).then(function () {
+      return payload;
+    }).catch(function (err) {
+      if (isMissingHistoricoItemsTable(err)) {
+        return saveSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
+          keyValue: key
+        }), payload);
+      }
+      throw err;
+    });
+  }
+
   function useSupabase() {
     return ACTIVE_BACKEND === 'supabase';
   }
@@ -347,15 +567,11 @@
   }
 
   function getSupabaseHistorico(syncKey) {
-    return getSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
-      keyValue: syncKey || SUPABASE_TABLES.historico.keyValue
-    }));
+    return getSupabaseHistoricoItems(syncKey);
   }
 
   function saveSupabaseHistorico(syncKey, payload) {
-    return saveSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
-      keyValue: syncKey || SUPABASE_TABLES.historico.keyValue
-    }), payload);
+    return saveSupabaseHistoricoItems(syncKey, payload);
   }
 
   function getSupabaseSupplierMemory() {
@@ -666,6 +882,48 @@
         return saveSupabaseHistorico(syncKey, payload);
       }
       return saveFirebaseHistorico(syncKey, payload);
+    },
+
+    saveHistoricoRecord: function (syncKey, record, userName) {
+      if (useSupabase()) {
+        return saveSupabaseHistoricoItem(syncKey, record, userName);
+      }
+      return getFirebaseHistorico(syncKey).then(function (payload) {
+        var data = payload && Array.isArray(payload.data) ? payload.data : [];
+        var idx = data.findIndex(function (item) { return item && record && item.id === record.id; });
+        if (idx >= 0) data[idx] = record;
+        else data.unshift(record);
+        return saveFirebaseHistorico(syncKey, {
+          ts: Date.now(),
+          user: userName || '',
+          data: data
+        });
+      });
+    },
+
+    deleteHistoricoRecord: function (syncKey, id, userName) {
+      if (useSupabase()) {
+        return deleteSupabaseHistoricoItem(syncKey, id, userName);
+      }
+      return getFirebaseHistorico(syncKey).then(function (payload) {
+        var data = payload && Array.isArray(payload.data) ? payload.data : [];
+        return saveFirebaseHistorico(syncKey, {
+          ts: Date.now(),
+          user: userName || '',
+          data: data.filter(function (item) { return item && item.id !== id; })
+        });
+      });
+    },
+
+    clearHistoricoRecords: function (syncKey, userName) {
+      if (useSupabase()) {
+        return clearSupabaseHistoricoItems(syncKey, userName);
+      }
+      return saveFirebaseHistorico(syncKey, {
+        ts: Date.now(),
+        user: userName || '',
+        data: []
+      });
     },
 
     getSupplierMemory: function () {

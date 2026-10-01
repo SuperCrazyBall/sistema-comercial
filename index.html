@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.79</div>
+    <div class="seg">Vrs.: 2.0.0.80</div>
   </div>
 
 </div><!-- /win -->
@@ -4411,8 +4411,8 @@ tbody tr.row-p {
 
 <div id="toast"></div>
 
-<script src="supabase-config.js?v=2.0.0.79"></script>
-<script src="data-provider.js?v=2.0.0.79"></script>
+<script src="supabase-config.js?v=2.0.0.80"></script>
+<script src="data-provider.js?v=2.0.0.80"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -5019,6 +5019,7 @@ function saveOrc(){
     toast('✔ Orçamento salvo no histórico!','ok');
   }
   setHist(hist); fillFils();
+  syncHistRecord(rec);
 }
 
 function fillFils(){
@@ -5290,9 +5291,9 @@ function hvRowClick(idx){
 }
 function loadFromHist(){var h=getHist().find(function(x){return x.id===viewingId;});if(!h)return;closeM('m-hview');_loadedHistId=h.id;applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
 function loadDirect(id){var h=getHist().find(function(x){return x.id===id;});if(!h)return;_loadedHistId=h.id;applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
-function delDirect(id){if(!confirm('Excluir este orçamento?'))return;var hist=getHist().filter(function(h){return h.id!==id;});setHist(hist);renderHist();fillFils();toast('Excluído.','warn');}
-function delHistItem(){if(!viewingId)return;if(!confirm('Excluir?'))return;var hist=getHist().filter(function(h){return h.id!==viewingId;});setHist(hist);closeM('m-hview');renderHist();fillFils();toast('Excluído.','warn');}
-function clearHist(){if(!confirm('Apagar TODO o histórico?'))return;localStorage.removeItem(STORE_KEY);renderHist();fillFils();toast('Histórico apagado.','warn');}
+function delDirect(id){if(!confirm('Excluir este orçamento?'))return;var hist=getHist().filter(function(h){return h.id!==id;});setHist(hist);syncHistDelete(id);renderHist();fillFils();toast('Excluído.','warn');}
+function delHistItem(){if(!viewingId)return;if(!confirm('Excluir?'))return;var deletedId=viewingId;var hist=getHist().filter(function(h){return h.id!==deletedId;});setHist(hist);syncHistDelete(deletedId);closeM('m-hview');renderHist();fillFils();toast('Excluído.','warn');}
+function clearHist(){if(!confirm('Apagar TODO o histórico?'))return;localStorage.removeItem(STORE_KEY);syncHistClear();renderHist();fillFils();toast('Histórico apagado.','warn');}
 
 // ════════════════════════════════════════════════════════════
 // ANALYTICS
@@ -5788,7 +5789,9 @@ function updHistVlUnit(input,idx,hid){
   // Atualizar total do orçamento
   var total=0; h.products.forEach(function(x){total+=(x.vlTotalNum||parseMoney(x.vlTotal||''));});
   h.total=total>0?fmtMoney(total):h.total;
+  h.savedAt = new Date().toISOString();
   setHist(hist);
+  syncHistRecord(h);
   // Atualizar célula de vl total na linha
   var cell=document.getElementById('hv-vlt-'+idx);
   if(cell) cell.textContent=p.vlTotalNum>0?fmtMoney(p.vlTotalNum):'—';
@@ -6645,6 +6648,7 @@ var histSyncBusy = false;
 var histSyncAgain = false;
 var histSyncWrite = false;
 var HIST_DELETED_KEY = 'vsorcamentos_deleted_v1';
+var HIST_PENDING_KEY = 'vsorcamentos_pending_ops_v1';
 
 // ── SPLASH ──────────────────────────────────────────────────
 (function runSplash() {
@@ -7005,6 +7009,98 @@ function setSyncSt(state, msg) {
   if (txt) txt.textContent = msg;
 }
 
+function getHistPendingOps() {
+  try {
+    return JSON.parse(localStorage.getItem(HIST_PENDING_KEY) || '[]') || [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function setHistPendingOps(ops) {
+  try {
+    localStorage.setItem(HIST_PENDING_KEY, JSON.stringify(ops || []));
+  } catch(e) {
+    console.warn('Falha ao gravar fila local do histórico.', e);
+  }
+}
+
+function enqueueHistOp(op) {
+  var ops = getHistPendingOps();
+  op = Object.assign({
+    opId: Date.now().toString() + '_' + Math.random().toString(36).slice(2),
+    queuedAt: new Date().toISOString()
+  }, op || {});
+  ops.push(op);
+  setHistPendingOps(ops);
+  return op;
+}
+
+async function executeHistOp(op) {
+  if (!op || !window.ComercialDataProvider) return;
+  if (op.type === 'upsert') {
+    await window.ComercialDataProvider.saveHistoricoRecord(syncKey(), op.record, CURRENT_USER && CURRENT_USER.name);
+    return;
+  }
+  if (op.type === 'delete') {
+    await window.ComercialDataProvider.deleteHistoricoRecord(syncKey(), op.id, CURRENT_USER && CURRENT_USER.name);
+    return;
+  }
+  if (op.type === 'clear') {
+    await window.ComercialDataProvider.clearHistoricoRecords(syncKey(), CURRENT_USER && CURRENT_USER.name);
+  }
+}
+
+async function flushPendingHistOps() {
+  var ops = getHistPendingOps();
+  var remaining = [];
+
+  if (!CURRENT_USER || !isFullAccessUser() || !ops.length) return true;
+  if (histSyncBusy) {
+    histSyncAgain = true;
+    return false;
+  }
+
+  histSyncBusy = true;
+  setSyncSt('busy', 'Salvando...');
+  try {
+    for (var i = 0; i < ops.length; i++) {
+      await executeHistOp(ops[i]);
+      remaining = ops.slice(i + 1);
+      setHistPendingOps(remaining);
+    }
+    localHistDirty = false;
+    setSyncSt('ok', 'Sincronizado ✓');
+    return true;
+  } catch(e) {
+    window.__lastHistoricoSyncError = e;
+    console.warn('Falha ao enviar fila do histórico ao backend remoto.', e);
+    setHistPendingOps(remaining.length ? remaining : ops);
+    setSyncSt('ok', 'Salvo local ✓');
+    return false;
+  } finally {
+    histSyncBusy = false;
+  }
+}
+
+function syncHistRecord(record) {
+  if (!record || !isFullAccessUser()) return;
+  enqueueHistOp({ type: 'upsert', id: record.id, record: record });
+  flushPendingHistOps();
+}
+
+function syncHistDelete(id) {
+  if (!id || !isFullAccessUser()) return;
+  enqueueHistOp({ type: 'delete', id: id });
+  flushPendingHistOps();
+}
+
+function syncHistClear() {
+  if (!isFullAccessUser()) return;
+  enqueueHistOp({ type: 'clear' });
+  flushPendingHistOps();
+}
+
 function histRecordId(item, idx) {
   item = item || {};
   return String(item.id || [item.numero, item.filial, item.createdAt, idx].join('|'));
@@ -7133,46 +7229,15 @@ function setHistFromSync(data) {
 }
 
 async function pushSync() {
-  if (!isFullAccessUser()) return;
-  if (histSyncBusy) {
-    histSyncAgain = true;
-    return;
-  }
-  histSyncBusy = true;
-  setSyncSt('busy', 'Salvando...');
-  try {
-    var localData = getHist();
-    var remote = await window.ComercialDataProvider.getHistorico(syncKey());
-    var merged = mergeHistoricoData(localData, remote && remote.data, remote && remote.ts);
-    var dataToSave = merged.data;
-
-    if (merged.changedLocal) {
-      setHistFromSync(dataToSave);
-      fillFils();
-      if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
-    }
-
-    var payload = { ts: Date.now(), data: dataToSave, user: CURRENT_USER.name };
-    await window.ComercialDataProvider.saveHistorico(syncKey(), payload);
-    lastSyncTs = payload.ts;
-    localHistDirty = false;
-    setSyncSt('ok', 'Sincronizado ✓');
-  } catch(e) {
-    // Fallback: salva só localmente
-    window.__lastHistoricoSyncError = e;
-    console.warn('Falha ao salvar historico no backend remoto. Mantendo cache local.', e);
-    setSyncSt('ok', 'Salvo local ✓');
-  } finally {
-    histSyncBusy = false;
-    if (histSyncAgain) {
-      histSyncAgain = false;
-      setTimeout(pushSync, 500);
-    }
-  }
+  return flushPendingHistOps();
 }
 
 async function pullSync() {
   if (!CURRENT_USER) return;
+  if (getHistPendingOps().length) {
+    var flushed = await flushPendingHistOps();
+    if (!flushed) return;
+  }
   if (histSyncBusy) {
     histSyncAgain = true;
     return;
@@ -7181,27 +7246,17 @@ async function pullSync() {
   setSyncSt('busy', 'Verificando...');
   try {
     var remote = await window.ComercialDataProvider.getHistorico(syncKey());
-    var merged = mergeHistoricoData(getHist(), remote && remote.data, remote && remote.ts);
+    var remoteData = remote && Array.isArray(remote.data) ? remote.data : [];
+    var localData = getHist();
 
-    if (merged.changedLocal) {
-      setHistFromSync(merged.data);
+    if (!histSameData(localData, remoteData)) {
+      setHistFromSync(remoteData);
       if (remote && remote.ts) lastSyncTs = Math.max(lastSyncTs || 0, remote.ts);
       fillFils();
       if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
       setSyncSt('ok', 'Atualizado ✓');
     } else if (remote && remote.ts && remote.ts > lastSyncTs) {
       lastSyncTs = remote.ts;
-      setSyncSt('ok', 'Sincronizado ✓');
-    }
-
-    if (isFullAccessUser() && (localHistDirty || merged.needsPush)) {
-      var payload = { ts: Date.now(), data: merged.data, user: CURRENT_USER.name };
-      setSyncSt('busy', 'Salvando...');
-      await window.ComercialDataProvider.saveHistorico(syncKey(), payload);
-      lastSyncTs = payload.ts;
-      localHistDirty = false;
-      fillFils();
-      if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
       setSyncSt('ok', 'Sincronizado ✓');
     } else {
       setSyncSt('ok', 'Sincronizado ✓');
@@ -7220,10 +7275,18 @@ async function pullSync() {
 }
 
 function startSync() {
-  pullSync();
+  tickSync();
   if (syncTimer) clearInterval(syncTimer);
   // Atualiza a cada 10 segundos
-  syncTimer = setInterval(pullSync, 10000);
+  syncTimer = setInterval(tickSync, 10000);
+}
+
+async function tickSync() {
+  if (getHistPendingOps().length) {
+    var flushed = await flushPendingHistOps();
+    if (!flushed) return;
+  }
+  await pullSync();
 }
 
 // Auto-push após salvar histórico
@@ -7234,10 +7297,6 @@ setHist = function(h) {
   if (!histSyncWrite) {
     rememberHistDeletes(prev || [], h || []);
     localHistDirty = true;
-  }
-  if (!histSyncWrite && isFullAccessUser()) {
-    clearTimeout(setHist._t);
-    setHist._t = setTimeout(pushSync, 600);
   }
 };
 
