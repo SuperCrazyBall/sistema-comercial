@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.78</div>
+    <div class="seg">Vrs.: 2.0.0.79</div>
   </div>
 
 </div><!-- /win -->
@@ -4411,8 +4411,8 @@ tbody tr.row-p {
 
 <div id="toast"></div>
 
-<script src="supabase-config.js?v=2.0.0.78"></script>
-<script src="data-provider.js?v=2.0.0.78"></script>
+<script src="supabase-config.js?v=2.0.0.79"></script>
+<script src="data-provider.js?v=2.0.0.79"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -6640,6 +6640,11 @@ var SYNC_PFX    = 'vsorc_sync_';
 var CURRENT_USER = null;
 var syncTimer   = null;
 var lastSyncTs  = 0;
+var localHistDirty = false;
+var histSyncBusy = false;
+var histSyncAgain = false;
+var histSyncWrite = false;
+var HIST_DELETED_KEY = 'vsorcamentos_deleted_v1';
 
 // ── SPLASH ──────────────────────────────────────────────────
 (function runSplash() {
@@ -7000,40 +7005,204 @@ function setSyncSt(state, msg) {
   if (txt) txt.textContent = msg;
 }
 
+function histRecordId(item, idx) {
+  item = item || {};
+  return String(item.id || [item.numero, item.filial, item.createdAt, idx].join('|'));
+}
+
+function histRecordStamp(item) {
+  var raw = item && (item.savedAt || item.updatedAt || item.createdAt || item.data);
+  var stamp = raw ? Date.parse(raw) : NaN;
+  if (!stamp && item && item.id && /^\d+$/.test(String(item.id))) {
+    stamp = Number(item.id);
+  }
+  return Number.isFinite(stamp) ? stamp : 0;
+}
+
+function histSameData(a, b) {
+  try {
+    return JSON.stringify(a || []) === JSON.stringify(b || []);
+  } catch(e) {
+    return false;
+  }
+}
+
+function getHistDeletedMap() {
+  try {
+    return JSON.parse(localStorage.getItem(HIST_DELETED_KEY) || '{}') || {};
+  } catch(e) {
+    return {};
+  }
+}
+
+function setHistDeletedMap(map) {
+  var keys = Object.keys(map || {}).sort(function(a, b) {
+    return (map[b] || 0) - (map[a] || 0);
+  }).slice(0, 500);
+  var clean = {};
+  keys.forEach(function(key) { clean[key] = map[key]; });
+  try {
+    localStorage.setItem(HIST_DELETED_KEY, JSON.stringify(clean));
+  } catch(e) {}
+}
+
+function rememberHistDeletes(prev, next) {
+  var nextIds = {};
+  var deleted = getHistDeletedMap();
+
+  (next || []).forEach(function(item, idx) {
+    nextIds[histRecordId(item, idx)] = true;
+  });
+  (prev || []).forEach(function(item, idx) {
+    var id = histRecordId(item, idx);
+    if (!nextIds[id]) deleted[id] = Date.now();
+  });
+  setHistDeletedMap(deleted);
+}
+
+function mergeHistoricoData(localData, remoteData, remoteTs) {
+  var local = Array.isArray(localData) ? localData : [];
+  var remote = Array.isArray(remoteData) ? remoteData : [];
+  var deleted = getHistDeletedMap();
+  var remoteById = {};
+  var resultById = {};
+  var changedLocal = false;
+  var needsPush = false;
+
+  remote.forEach(function(item, idx) {
+    var id = histRecordId(item, idx);
+    var tombstone = deleted[id] || 0;
+    if (tombstone && tombstone > histRecordStamp(item)) {
+      needsPush = true;
+      return;
+    }
+    remoteById[id] = item;
+    resultById[id] = item;
+  });
+
+  local.forEach(function(item, idx) {
+    var id = histRecordId(item, idx);
+    var remoteItem = remoteById[id];
+    var localStamp = histRecordStamp(item);
+    var remoteStamp = histRecordStamp(remoteItem);
+    var tombstone = deleted[id] || 0;
+
+    if (tombstone && tombstone > localStamp) {
+      changedLocal = true;
+      needsPush = true;
+      delete resultById[id];
+      return;
+    }
+
+    if (!remoteItem) {
+      if (localHistDirty || localStamp > (remoteTs || 0)) {
+        resultById[id] = item;
+        needsPush = true;
+      } else {
+        changedLocal = true;
+      }
+      return;
+    }
+
+    if (localStamp > remoteStamp || (localStamp === remoteStamp && !histSameData([item], [remoteItem]))) {
+      resultById[id] = item;
+      needsPush = true;
+    } else if (remoteStamp > localStamp) {
+      changedLocal = true;
+      resultById[id] = remoteItem;
+    }
+  });
+
+  var merged = Object.keys(resultById).map(function(id) {
+    return resultById[id];
+  }).sort(function(a, b) {
+    return histRecordStamp(b) - histRecordStamp(a);
+  });
+
+  if (!histSameData(local, merged)) changedLocal = true;
+  return { data: merged, changedLocal: changedLocal, needsPush: needsPush };
+}
+
+function setHistFromSync(data) {
+  histSyncWrite = true;
+  try {
+    _origSetHistForSync(data);
+  } finally {
+    histSyncWrite = false;
+  }
+}
+
 async function pushSync() {
   if (!isFullAccessUser()) return;
+  if (histSyncBusy) {
+    histSyncAgain = true;
+    return;
+  }
+  histSyncBusy = true;
   setSyncSt('busy', 'Salvando...');
   try {
-    var payload = { ts: Date.now(), data: getHist(), user: CURRENT_USER.name };
+    var localData = getHist();
+    var remote = await window.ComercialDataProvider.getHistorico(syncKey());
+    var merged = mergeHistoricoData(localData, remote && remote.data, remote && remote.ts);
+    var dataToSave = merged.data;
+
+    if (merged.changedLocal) {
+      setHistFromSync(dataToSave);
+      fillFils();
+      if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
+    }
+
+    var payload = { ts: Date.now(), data: dataToSave, user: CURRENT_USER.name };
     await window.ComercialDataProvider.saveHistorico(syncKey(), payload);
     lastSyncTs = payload.ts;
+    localHistDirty = false;
     setSyncSt('ok', 'Sincronizado ✓');
   } catch(e) {
     // Fallback: salva só localmente
     window.__lastHistoricoSyncError = e;
     console.warn('Falha ao salvar historico no backend remoto. Mantendo cache local.', e);
     setSyncSt('ok', 'Salvo local ✓');
+  } finally {
+    histSyncBusy = false;
+    if (histSyncAgain) {
+      histSyncAgain = false;
+      setTimeout(pushSync, 500);
+    }
   }
 }
 
 async function pullSync() {
   if (!CURRENT_USER) return;
+  if (histSyncBusy) {
+    histSyncAgain = true;
+    return;
+  }
+  histSyncBusy = true;
   setSyncSt('busy', 'Verificando...');
   try {
     var remote = await window.ComercialDataProvider.getHistorico(syncKey());
-    if (remote && remote.ts && remote.ts > lastSyncTs) {
-      // Dados remotos mais recentes — atualizar local
-      localStorage.setItem(STORE_KEY, JSON.stringify(remote.data || []));
-      lastSyncTs = remote.ts;
+    var merged = mergeHistoricoData(getHist(), remote && remote.data, remote && remote.ts);
+
+    if (merged.changedLocal) {
+      setHistFromSync(merged.data);
+      if (remote && remote.ts) lastSyncTs = Math.max(lastSyncTs || 0, remote.ts);
       fillFils();
       if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
       setSyncSt('ok', 'Atualizado ✓');
-    } else if (isFullAccessUser() && lastSyncTs > 0) {
-      // Local mais recente E já sincronizou ao menos uma vez nesta sessão — enviar para nuvem.
-      // IMPORTANTE: lastSyncTs===0 significa primeira carga após abertura do sistema;
-      // nunca sobrescrevemos o Firebase sem ter recebido ao menos um pull bem-sucedido,
-      // para evitar apagar dados remotos mais recentes ao abrir uma nova sessão.
-      await pushSync();
+    } else if (remote && remote.ts && remote.ts > lastSyncTs) {
+      lastSyncTs = remote.ts;
+      setSyncSt('ok', 'Sincronizado ✓');
+    }
+
+    if (isFullAccessUser() && (localHistDirty || merged.needsPush)) {
+      var payload = { ts: Date.now(), data: merged.data, user: CURRENT_USER.name };
+      setSyncSt('busy', 'Salvando...');
+      await window.ComercialDataProvider.saveHistorico(syncKey(), payload);
+      lastSyncTs = payload.ts;
+      localHistDirty = false;
+      fillFils();
+      if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
+      setSyncSt('ok', 'Sincronizado ✓');
     } else {
       setSyncSt('ok', 'Sincronizado ✓');
     }
@@ -7041,21 +7210,32 @@ async function pullSync() {
     window.__lastHistoricoSyncError = e;
     console.warn('Falha ao verificar historico no backend remoto.', e);
     setSyncSt('err', 'Offline');
+  } finally {
+    histSyncBusy = false;
+    if (histSyncAgain) {
+      histSyncAgain = false;
+      setTimeout(pullSync, 500);
+    }
   }
 }
 
 function startSync() {
   pullSync();
   if (syncTimer) clearInterval(syncTimer);
-  // Atualiza a cada 20 segundos
-  syncTimer = setInterval(pullSync, 20000);
+  // Atualiza a cada 10 segundos
+  syncTimer = setInterval(pullSync, 10000);
 }
 
 // Auto-push após salvar histórico
 var _origSetHistForSync = setHist;
 setHist = function(h) {
+  var prev = histSyncWrite ? null : getHist();
   _origSetHistForSync(h);
-  if (isFullAccessUser()) {
+  if (!histSyncWrite) {
+    rememberHistDeletes(prev || [], h || []);
+    localHistDirty = true;
+  }
+  if (!histSyncWrite && isFullAccessUser()) {
     clearTimeout(setHist._t);
     setHist._t = setTimeout(pushSync, 600);
   }
