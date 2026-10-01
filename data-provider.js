@@ -2,7 +2,7 @@
   'use strict';
 
   var FIREBASE_BASE_URL = 'https://comercial-norte-default-rtdb.firebaseio.com/';
-  var ACTIVE_BACKEND = 'firebase';
+  var ACTIVE_BACKEND = 'supabase';
   var DEFAULT_SUPABASE_CONFIG = {
     url: '',
     anonKey: ''
