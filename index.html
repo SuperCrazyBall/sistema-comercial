@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.80</div>
+    <div class="seg">Vrs.: 2.0.0.81</div>
   </div>
 
 </div><!-- /win -->
@@ -4411,8 +4411,8 @@ tbody tr.row-p {
 
 <div id="toast"></div>
 
-<script src="supabase-config.js?v=2.0.0.80"></script>
-<script src="data-provider.js?v=2.0.0.80"></script>
+<script src="supabase-config.js?v=2.0.0.81"></script>
+<script src="data-provider.js?v=2.0.0.81"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -5683,7 +5683,7 @@ function switchTab(id){
   var map={'pane-import':'t-import','pane-cruzamento':'t-cruzamento','pane-cortes-fornecedores':'t-cortes-fornecedores','pane-saldos-cheques':'t-saldos-cheques','pane-hist':'t-hist','pane-ana':'t-ana'};
   document.querySelectorAll('.tab-btn').forEach(function(t){t.classList.remove('active');});
   if(map[id]){var tb=document.getElementById(map[id]);if(tb)tb.classList.add('active');}
-  if(id==='pane-hist'){fillFils();renderHist();}
+  if(id==='pane-hist'){fillFils();renderHist();requestFastHistSync(100);}
   if(id==='pane-ana'){fillFils();}
 }
 
@@ -6643,6 +6643,8 @@ var SYNC_PFX    = 'vsorc_sync_';
 var CURRENT_USER = null;
 var syncTimer   = null;
 var lastSyncTs  = 0;
+var histSyncFastTimer = null;
+var histSyncStatusTimer = null;
 var localHistDirty = false;
 var histSyncBusy = false;
 var histSyncAgain = false;
@@ -7009,6 +7011,12 @@ function setSyncSt(state, msg) {
   if (txt) txt.textContent = msg;
 }
 
+function requestFastHistSync(delay) {
+  if (!CURRENT_USER || CURRENT_USER.role === 'financeiro') return;
+  clearTimeout(histSyncFastTimer);
+  histSyncFastTimer = setTimeout(tickSync, typeof delay === 'number' ? delay : 250);
+}
+
 function getHistPendingOps() {
   try {
     return JSON.parse(localStorage.getItem(HIST_PENDING_KEY) || '[]') || [];
@@ -7086,19 +7094,19 @@ async function flushPendingHistOps() {
 function syncHistRecord(record) {
   if (!record || !isFullAccessUser()) return;
   enqueueHistOp({ type: 'upsert', id: record.id, record: record });
-  flushPendingHistOps();
+  requestFastHistSync(80);
 }
 
 function syncHistDelete(id) {
   if (!id || !isFullAccessUser()) return;
   enqueueHistOp({ type: 'delete', id: id });
-  flushPendingHistOps();
+  requestFastHistSync(80);
 }
 
 function syncHistClear() {
   if (!isFullAccessUser()) return;
   enqueueHistOp({ type: 'clear' });
-  flushPendingHistOps();
+  requestFastHistSync(80);
 }
 
 function histRecordId(item, idx) {
@@ -7243,7 +7251,10 @@ async function pullSync() {
     return;
   }
   histSyncBusy = true;
-  setSyncSt('busy', 'Verificando...');
+  clearTimeout(histSyncStatusTimer);
+  histSyncStatusTimer = setTimeout(function() {
+    setSyncSt('busy', 'Verificando...');
+  }, 350);
   try {
     var remote = await window.ComercialDataProvider.getHistorico(syncKey());
     var remoteData = remote && Array.isArray(remote.data) ? remote.data : [];
@@ -7266,6 +7277,7 @@ async function pullSync() {
     console.warn('Falha ao verificar historico no backend remoto.', e);
     setSyncSt('err', 'Offline');
   } finally {
+    clearTimeout(histSyncStatusTimer);
     histSyncBusy = false;
     if (histSyncAgain) {
       histSyncAgain = false;
@@ -7277,8 +7289,8 @@ async function pullSync() {
 function startSync() {
   tickSync();
   if (syncTimer) clearInterval(syncTimer);
-  // Atualiza a cada 10 segundos
-  syncTimer = setInterval(tickSync, 10000);
+  // Atualiza a cada 4 segundos para aproximar a experiência do Firebase.
+  syncTimer = setInterval(tickSync, 4000);
 }
 
 async function tickSync() {
@@ -7299,6 +7311,14 @@ setHist = function(h) {
     localHistDirty = true;
   }
 };
+
+window.addEventListener('focus', function() {
+  requestFastHistSync(100);
+});
+
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden) requestFastHistSync(100);
+});
 
 
 </script>
