@@ -69,10 +69,12 @@
     view: "summary",
     paymentView: "summary",
     syncStarted: false,
-    syncTimer: null
+    syncTimer: null,
+    realtimeClient: null,
+    realtimeChannel: null
   };
 
-  const FINANCE_MODULE_VERSION = "2.0.0.67";
+  const FINANCE_MODULE_VERSION = "2.0.0.83";
   const FIREBASE_FALLBACK_URL = "https://comercial-norte-default-rtdb.firebaseio.com/";
   const LATEST_ANALYSIS_CACHE_KEY = "finance_latest_analysis_cache_v2";
   const DATE_MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -1294,6 +1296,44 @@
     state.syncStarted = true;
     loadLatestAnalysis(true);
     state.syncTimer = window.setInterval(() => loadLatestAnalysis(true), 20000);
+    startFinanceRealtime();
+  }
+
+  function startFinanceRealtime() {
+    const provider = dataProvider();
+
+    if (!canUseFinanceSync() || state.realtimeChannel) {
+      return;
+    }
+    if (!provider || typeof provider.createSupabaseClient !== "function") {
+      return;
+    }
+
+    try {
+      state.realtimeClient = provider.createSupabaseClient();
+      state.realtimeChannel = state.realtimeClient
+        .channel("financeiro-ultima-analise")
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "financeiro_ultima_analise",
+          filter: "id=eq.ultima"
+        }, (payload) => {
+          window.__financeLatestRealtimeEvent = payload;
+          loadLatestAnalysis(true);
+        })
+        .subscribe((status) => {
+          window.__financeLatestRealtimeStatus = status;
+          if (status === "SUBSCRIBED") {
+            setSyncStatus(state.latestRemote ? latestMetaText(state.latestRemote) : "Sincronizado", "ok");
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.warn("Realtime financeiro indisponível:", status);
+          }
+        });
+    } catch (error) {
+      window.__financeLatestRealtimeError = error;
+      console.warn("Não foi possível iniciar Realtime financeiro.", error);
+    }
   }
 
   resetAnalysis();

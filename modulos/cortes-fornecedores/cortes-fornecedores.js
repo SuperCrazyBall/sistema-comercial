@@ -67,6 +67,8 @@
     memorySyncBusy: false,
     memorySyncPending: false,
     memoryLastSyncTs: 0,
+    memoryRealtimeClient: null,
+    memoryRealtimeChannel: null,
     remoteMemoryLoaded: false,
     memory: loadMemory(),
     preview: {
@@ -401,6 +403,40 @@
     loadRemoteMemory();
     if (state.memorySyncInterval) clearInterval(state.memorySyncInterval);
     state.memorySyncInterval = setInterval(loadRemoteMemory, 20000);
+    startMemoryRealtime();
+  }
+
+  function startMemoryRealtime() {
+    var provider = dataProvider();
+
+    if (!state.canAccess || state.memoryRealtimeChannel) return;
+    if (!provider || typeof provider.createSupabaseClient !== 'function') return;
+
+    try {
+      state.memoryRealtimeClient = provider.createSupabaseClient();
+      state.memoryRealtimeChannel = state.memoryRealtimeClient
+        .channel('cortes-fornecedores-memoria')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'cortes_fornecedores_memoria',
+          filter: 'sync_key=eq.transferencia'
+        }, function (payload) {
+          window.__cfMemoryRealtimeEvent = payload;
+          loadRemoteMemory();
+        })
+        .subscribe(function (status) {
+          window.__cfMemoryRealtimeStatus = status;
+          if (status === 'SUBSCRIBED') {
+            setMemoryStatus('Sincronizado', 'ok');
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('Realtime da memória de fornecedores indisponível:', status);
+          }
+        });
+    } catch (err) {
+      window.__cfMemoryRealtimeError = err;
+      console.warn('Não foi possível iniciar Realtime da memória de fornecedores.', err);
+    }
   }
 
   function rememberSupplier(name) {
