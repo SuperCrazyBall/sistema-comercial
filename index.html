@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.81</div>
+    <div class="seg">Vrs.: 2.0.0.82</div>
   </div>
 
 </div><!-- /win -->
@@ -4411,8 +4411,9 @@ tbody tr.row-p {
 
 <div id="toast"></div>
 
-<script src="supabase-config.js?v=2.0.0.81"></script>
-<script src="data-provider.js?v=2.0.0.81"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js?v=2.0.0.82"></script>
+<script src="data-provider.js?v=2.0.0.82"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -6645,6 +6646,8 @@ var syncTimer   = null;
 var lastSyncTs  = 0;
 var histSyncFastTimer = null;
 var histSyncStatusTimer = null;
+var histRealtimeClient = null;
+var histRealtimeChannel = null;
 var localHistDirty = false;
 var histSyncBusy = false;
 var histSyncAgain = false;
@@ -6797,6 +6800,7 @@ async function doLogin() {
   // Sincronização
   if (CURRENT_USER.role !== 'financeiro') {
     startSync();
+    startHistoricoRealtime();
   } else {
     setSyncSt('busy', 'Verificando...');
   }
@@ -7015,6 +7019,39 @@ function requestFastHistSync(delay) {
   if (!CURRENT_USER || CURRENT_USER.role === 'financeiro') return;
   clearTimeout(histSyncFastTimer);
   histSyncFastTimer = setTimeout(tickSync, typeof delay === 'number' ? delay : 250);
+}
+
+function startHistoricoRealtime() {
+  if (!CURRENT_USER || CURRENT_USER.role === 'financeiro') return;
+  if (!window.ComercialDataProvider || !window.ComercialDataProvider.createSupabaseClient) return;
+  if (histRealtimeChannel) return;
+
+  try {
+    histRealtimeClient = window.ComercialDataProvider.createSupabaseClient();
+    histRealtimeChannel = histRealtimeClient
+      .channel('historico-orcamentos-transferencia')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'historico_orcamentos',
+        filter: 'sync_key=eq.transferencia'
+      }, function(payload) {
+        window.__lastHistoricoRealtimeEvent = payload;
+        requestFastHistSync(80);
+      })
+      .subscribe(function(status) {
+        window.__historicoRealtimeStatus = status;
+        if (status === 'SUBSCRIBED') {
+          setSyncSt('ok', 'Sincronizado ✓');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Realtime do histórico indisponível:', status);
+          requestFastHistSync(500);
+        }
+      });
+  } catch(e) {
+    window.__lastHistoricoRealtimeError = e;
+    console.warn('Não foi possível iniciar Realtime do histórico.', e);
+  }
 }
 
 function getHistPendingOps() {
@@ -7289,8 +7326,8 @@ async function pullSync() {
 function startSync() {
   tickSync();
   if (syncTimer) clearInterval(syncTimer);
-  // Atualiza a cada 4 segundos para aproximar a experiência do Firebase.
-  syncTimer = setInterval(tickSync, 4000);
+  // Polling fica como fallback. O caminho principal é Supabase Realtime.
+  syncTimer = setInterval(tickSync, 15000);
 }
 
 async function tickSync() {

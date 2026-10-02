@@ -831,6 +831,37 @@
     return Promise.resolve({ ok: true });
   }
 
+  function createSupabaseClient() {
+    var config = supabaseConfig();
+    var client;
+
+    if (!supabaseConfigured()) {
+      throw new Error('Supabase não configurado.');
+    }
+    if (!window.supabase || !window.supabase.createClient) {
+      throw new Error('Biblioteca Supabase JS não carregada.');
+    }
+    client = window.supabase.createClient(config.url, config.anonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
+    if (supabaseSession && supabaseSession.access_token) {
+      if (client.realtime && client.realtime.setAuth) {
+        client.realtime.setAuth(supabaseSession.access_token);
+      }
+      if (client.auth && client.auth.setSession && supabaseSession.refresh_token) {
+        client.auth.setSession({
+          access_token: supabaseSession.access_token,
+          refresh_token: supabaseSession.refresh_token
+        }).catch(function () {});
+      }
+    }
+    return client;
+  }
+
   var provider = {
     backend: function () {
       return ACTIVE_BACKEND;
@@ -855,6 +886,8 @@
     firebaseUrl: firebaseUrl,
 
     supabaseConfigured: supabaseConfigured,
+
+    createSupabaseClient: createSupabaseClient,
 
     testSupabaseConnection: testSupabaseConnection,
 
