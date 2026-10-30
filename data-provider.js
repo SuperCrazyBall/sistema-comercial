@@ -246,6 +246,10 @@
 
   function historicoItemToRow(syncKey, item, userName, deletedAt) {
     item = item || {};
+    if (item.__summary || !Array.isArray(item.products)) throw new Error('Não é possível salvar um resumo sem os produtos.');
+    item = Object.assign({}, item);
+    delete item.updated_at;
+    delete item.__counts;
     return {
       sync_key: syncKey || SUPABASE_TABLES.historico.keyValue,
       id: String(item.id || Date.now()),
@@ -255,8 +259,7 @@
       saved_at: item.savedAt || item.createdAt || new Date().toISOString(),
       deleted_at: deletedAt || null,
       user_name: userName || '',
-      data: item,
-      updated_at: new Date().toISOString()
+      data: item
     };
   }
 
@@ -382,12 +385,12 @@
       return Promise.reject(new Error('Supabase não configurado.'));
     }
 
-    return fetch(supabaseUrl(SUPABASE_TABLES.historicoItems.table + '?on_conflict=sync_key,id'), {
+    return fetch(supabaseUrl(SUPABASE_TABLES.historicoItems.table + '?on_conflict=sync_key,id&select=id,updated_at'), {
       method: 'POST',
-      headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=representation' }),
       body: JSON.stringify(row)
-    }).then(assertOk).then(function () {
-      return item;
+    }).then(assertOk).then(function (response) { return response.json(); }).then(function (rows) {
+      return Object.assign({}, item, { updated_at: rows && rows[0] && rows[0].updated_at });
     }).catch(function (err) {
       if (isMissingHistoricoItemsTable(err)) {
         return getSupabaseSingleton(Object.assign({}, SUPABASE_TABLES.historico, {
@@ -416,7 +419,6 @@
     var body = {
       deleted_at: new Date().toISOString(),
       user_name: userName || '',
-      updated_at: new Date().toISOString()
     };
     var path = SUPABASE_TABLES.historicoItems.table
       + '?sync_key=eq.' + encodeURIComponent(key)
@@ -457,7 +459,6 @@
     var body = {
       deleted_at: new Date().toISOString(),
       user_name: userName || '',
-      updated_at: new Date().toISOString()
     };
     var path = SUPABASE_TABLES.historicoItems.table
       + '?sync_key=eq.' + encodeURIComponent(key)
@@ -827,6 +828,8 @@
   }
 
   function signOutSupabase() {
+    if (window.ComercialSync && window.ComercialSync.stopAll) window.ComercialSync.stopAll();
+    window.dispatchEvent(new Event('comercial:logout'));
     saveSupabaseSession(null);
     return Promise.resolve({ ok: true });
   }
@@ -863,6 +866,29 @@
   }
 
   var provider = {
+    request: function (path) {
+      return fetch(supabaseUrl(path), { headers: supabaseHeaders(), cache: 'no-store' }).then(assertOk).then(function (response) { return response.json(); });
+    },
+
+    listHistoricoSummaries: async function (syncKey, since) {
+      var all = [], after = null, rows;
+      do {
+        var path = 'historico_orcamentos_resumos?select=*&sync_key=eq.' + encodeURIComponent(syncKey || 'transferencia') + '&order=updated_at.asc,id.asc&limit=200';
+        if (since) path += '&updated_at=gte.' + encodeURIComponent(since);
+        if (after) path += '&or=' + encodeURIComponent('(updated_at.gt.' + after.updated_at + ',and(updated_at.eq.' + after.updated_at + ',id.gt.' + JSON.stringify(String(after.id)) + '))');
+        rows = await provider.request(path);
+        all = all.concat(rows);
+        if (rows.length) after = rows[rows.length - 1];
+      } while (rows.length === 200);
+      return all;
+    },
+
+    getHistoricoDetail: async function (syncKey, id) {
+      var rows = await provider.request('historico_orcamentos?select=id,data,updated_at,deleted_at&sync_key=eq.' + encodeURIComponent(syncKey || 'transferencia') + '&id=eq.' + encodeURIComponent(id) + '&limit=1');
+      return rows[0] || null;
+    },
+
+    sessionInfo: safeSessionInfo,
     backend: function () {
       return ACTIVE_BACKEND;
     },

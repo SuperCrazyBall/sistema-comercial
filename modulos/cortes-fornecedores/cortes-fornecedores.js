@@ -400,9 +400,13 @@
   }
 
   function startMemorySync() {
-    loadRemoteMemory();
-    if (state.memorySyncInterval) clearInterval(state.memorySyncInterval);
-    state.memorySyncInterval = setInterval(loadRemoteMemory, 20000);
+    var parentWindow=window.parent;
+    state.memoryController=parentWindow.ComercialSync.createSyncController({
+      document:parentWindow.document,
+      authorized:function(){return state.canAccess;},
+      run:loadRemoteMemory
+    });
+    state.memoryController.start();
     startMemoryRealtime();
   }
 
@@ -423,10 +427,11 @@
           filter: 'sync_key=eq.transferencia'
         }, function (payload) {
           window.__cfMemoryRealtimeEvent = payload;
-          loadRemoteMemory();
+          if(state.memoryController) state.memoryController.event(false);
         })
         .subscribe(function (status) {
           window.__cfMemoryRealtimeStatus = status;
+          if(state.memoryController) state.memoryController.status(status);
           if (status === 'SUBSCRIBED') {
             setMemoryStatus('Sincronizado', 'ok');
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -583,6 +588,13 @@
       if (state.canAccess || tries >= 120) clearInterval(timer);
     }, 500);
 
+    window.parent.addEventListener('comercial:login',renderAccess);
+    window.parent.addEventListener('comercial:logout',function(){
+      clearInterval(timer);
+      clearTimeout(state.memorySyncTimer);
+      state.canAccess=false;state.remoteMemoryLoaded=false;
+      state.memoryRealtimeChannel=null;state.memoryRealtimeClient=null;
+    });
     window.addEventListener('focus', renderAccess);
     document.addEventListener('visibilitychange', renderAccess);
   }

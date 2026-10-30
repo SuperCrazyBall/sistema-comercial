@@ -1286,16 +1286,21 @@
   };
 
   function startFinanceSyncWhenAuthorized() {
+    window.clearTimeout(state.authRetryTimer);
     if (state.syncStarted) {
       return;
     }
     if (!canUseFinanceSync()) {
-      window.setTimeout(startFinanceSyncWhenAuthorized, 700);
+      state.authRetryTimer=window.setTimeout(startFinanceSyncWhenAuthorized, 700);
       return;
     }
     state.syncStarted = true;
-    loadLatestAnalysis(true);
-    state.syncTimer = window.setInterval(() => loadLatestAnalysis(true), 20000);
+    state.controller=window.parent.ComercialSync.createSyncController({
+      document:window.parent.document,
+      authorized:canUseFinanceSync,
+      run:()=>loadLatestAnalysis(true)
+    });
+    state.controller.start();
     startFinanceRealtime();
   }
 
@@ -1320,10 +1325,11 @@
           filter: "id=eq.ultima"
         }, (payload) => {
           window.__financeLatestRealtimeEvent = payload;
-          loadLatestAnalysis(true);
+          if(state.controller) state.controller.event(false);
         })
         .subscribe((status) => {
           window.__financeLatestRealtimeStatus = status;
+          if(state.controller) state.controller.status(status);
           if (status === "SUBSCRIBED") {
             setSyncStatus(state.latestRemote ? latestMetaText(state.latestRemote) : "Sincronizado", "ok");
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
@@ -1336,6 +1342,11 @@
     }
   }
 
+  window.parent.addEventListener('comercial:login',startFinanceSyncWhenAuthorized);
+  window.parent.addEventListener('comercial:logout',()=>{
+    window.clearTimeout(state.authRetryTimer);
+    state.syncStarted=false;state.realtimeChannel=null;state.realtimeClient=null;
+  });
   resetAnalysis();
   restoreCachedLatest();
   console.info(`Financeiro Saldos e Cheques v${FINANCE_MODULE_VERSION} carregado.`);

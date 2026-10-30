@@ -4224,7 +4224,7 @@ tbody tr.row-p {
     <div id="pane-cortes-fornecedores" class="pane">
       <iframe
         title="Cortes Fornecedores"
-        src="modulos/cortes-fornecedores/index.html?v=2.0.0.83"
+        src="modulos/cortes-fornecedores/index.html?v=2.0.0.84"
         style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
       </iframe>
     </div>
@@ -4233,7 +4233,7 @@ tbody tr.row-p {
     <div id="pane-saldos-cheques" class="pane">
       <iframe
         title="Saldos e Cheques"
-        src="modulos/saldos-cheques/index.html?v=2.0.0.83"
+        src="modulos/saldos-cheques/index.html?v=2.0.0.84"
         style="width:100%;height:calc(100vh - 124px);border:0;display:block;background:#F5EDD8">
       </iframe>
     </div>
@@ -4303,7 +4303,7 @@ tbody tr.row-p {
     <div class="seg" id="seg-user">&#8212;</div>
     <div class="seg" id="seg-sync"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">Offline</span></div>
     <div class="seg" id="seg-d"></div>
-    <div class="seg">Vrs.: 2.0.0.83</div>
+    <div class="seg">Vrs.: 2.0.0.84</div>
   </div>
 
 </div><!-- /win -->
@@ -4412,8 +4412,10 @@ tbody tr.row-p {
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=2.0.0.83"></script>
-<script src="data-provider.js?v=2.0.0.83"></script>
+<script src="supabase-config.js?v=2.0.0.84"></script>
+<script src="data-provider.js?v=2.0.0.84"></script>
+<script src="sync-core.js?v=2.0.0.84"></script>
+<script src="egress-provider.js?v=2.0.0.84"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════
@@ -4450,8 +4452,8 @@ function fmtMoney(n) {
   var i = s[0].split('').reverse().join('').replace(/(\d{3})(?=\d)/g,'$1.').split('').reverse().join('');
   return (neg?'-':'') + 'R$ ' + i + ',' + s[1];
 }
-function getHist() { try { return JSON.parse(localStorage.getItem(STORE_KEY)||'[]'); } catch(e) { return []; } }
-function setHist(h) { try { localStorage.setItem(STORE_KEY, JSON.stringify(h)); } catch(e) { toast('Armazenamento cheio!','err'); } }
+function getHist() { return window.ComercialDataProvider.historyStore.list(); }
+function setHist(h) { window.ComercialDataProvider.historyStore.setLocal(h).catch(function(e) { toast('Falha no cache local: ' + e.message, 'err'); }); }
 function show(id) { document.getElementById(id).style.display='block'; }
 function hide(id) { document.getElementById(id).style.display='none'; }
 // openM/closeM defined below in window system
@@ -5182,15 +5184,22 @@ function renderHist(){
     if(fb&&h.numero.toLowerCase().indexOf(fb)<0&&(h.filial||'').toLowerCase().indexOf(fb)<0)return false;
     return true;
   });
-  document.getElementById('hcount').textContent=hist.length+' orçamento(s)';
+  var filterKey = [ff,fp,fb,document.getElementById('hf-dt-de').value,document.getElementById('hf-dt-ate').value].join('|');
+  if (window.__histFilterKey !== filterKey) { window.__histPage = 0; window.__histFilterKey = filterKey; }
+  var totalRows = hist.length, pages = Math.max(1,Math.ceil(totalRows/50));
+  window.__histPage = Math.max(0,Math.min(window.__histPage || 0,pages-1));
+  hist=hist.slice(window.__histPage*50,(window.__histPage+1)*50);
+  document.getElementById('hcount').textContent=totalRows+' orçamento(s)';
+  var pager=document.getElementById('hist-pager');
+  if(!pager){pager=document.createElement('div');pager.id='hist-pager';document.getElementById('hist-list').after(pager);}
+  pager.innerHTML='<button class="vbtn" onclick="histPage(-1)" '+(!window.__histPage?'disabled':'')+'>Anterior</button> <span>Página '+(window.__histPage+1)+' de '+pages+'</span> <button class="vbtn" onclick="histPage(1)" '+(window.__histPage>=pages-1?'disabled':'')+'>Próxima</button>';
   var html='';
   if(!hist.length){html='<div style="text-align:center;padding:20px;color:#888;font-style:italic">Nenhum orçamento no histórico.<br><small>Importe e clique em 💾 Salvar.</small></div>';}
   else{hist.forEach(function(h){
     var prods=h.products||[];
-    var snt=prods.filter(function(p){return p.status==='sent';}).length;
-    var cut=prods.filter(function(p){return p.status==='cut';}).length;
-    var par=prods.filter(function(p){return p.status==='partial';}).length;
-    var pct=prods.length?Math.round(((cut+par)/prods.length)*100):0;
+    var counts=h.__counts || {total:prods.length,sent:prods.filter(function(p){return p.status==='sent';}).length,cut:prods.filter(function(p){return p.status==='cut';}).length,partial:prods.filter(function(p){return p.status==='partial';}).length};
+    var snt=counts.sent,cut=counts.cut,par=counts.partial;
+    var pct=counts.total?Math.round(((cut+par)/counts.total)*100):0;
     var dtOpts={day:'2-digit',month:'2-digit',year:'numeric'};
     var svCreated=new Date(h.createdAt||h.savedAt).toLocaleDateString('pt-BR',dtOpts);
     var svMod=new Date(h.savedAt).toLocaleDateString('pt-BR',dtOpts);
@@ -5201,7 +5210,7 @@ function renderHist(){
     html+='<div class="hcard" onclick="viewHist(\''+h.id+'\')">';
     html+='<span class="hnum">Nº '+h.numero+'</span>';
     html+='<span class="hfil">'+h.filial+'</span>';
-    html+='<span class="hinfo">Vendedor: '+h.gestor+' | Data: '+h.data+' | '+prods.length+' itens | <span title="Data de entrada no sistema">📥 '+svCreated+'</span>'+modStr+'</span>';
+    html+='<span class="hinfo">Vendedor: '+h.gestor+' | Data: '+h.data+' | '+counts.total+' itens | <span title="Data de entrada no sistema">📥 '+svCreated+'</span>'+modStr+'</span>';
     html+='<div class="hstats">';
     if(snt)html+='<span class="hm hms">✓'+snt+'</span>';
     if(par)html+='<span class="hm hmp">~'+par+'</span>';
@@ -5294,7 +5303,7 @@ function loadFromHist(){var h=getHist().find(function(x){return x.id===viewingId
 function loadDirect(id){var h=getHist().find(function(x){return x.id===id;});if(!h)return;_loadedHistId=h.id;applyResult(h);switchTab('pane-import');toast('✔ Orçamento carregado.','ok');}
 function delDirect(id){if(!confirm('Excluir este orçamento?'))return;var hist=getHist().filter(function(h){return h.id!==id;});setHist(hist);syncHistDelete(id);renderHist();fillFils();toast('Excluído.','warn');}
 function delHistItem(){if(!viewingId)return;if(!confirm('Excluir?'))return;var deletedId=viewingId;var hist=getHist().filter(function(h){return h.id!==deletedId;});setHist(hist);syncHistDelete(deletedId);closeM('m-hview');renderHist();fillFils();toast('Excluído.','warn');}
-function clearHist(){if(!confirm('Apagar TODO o histórico?'))return;localStorage.removeItem(STORE_KEY);syncHistClear();renderHist();fillFils();toast('Histórico apagado.','warn');}
+function clearHist(){if(!confirm('Apagar TODO o histórico?'))return;setHist([]);syncHistClear();renderHist();fillFils();toast('Histórico apagado.','warn');}
 
 // ════════════════════════════════════════════════════════════
 // ANALYTICS
@@ -6791,6 +6800,15 @@ async function doLogin() {
   el = document.getElementById('tb-op');    if (el) el.textContent = CURRENT_USER.name;
   el = document.getElementById('seg-op');   if (el) el.textContent = 'Operador : ' + CURRENT_USER.name;
   el = document.getElementById('seg-user'); if (el) { el.textContent = CURRENT_USER.name; el.style.background='#1A4A9A'; el.style.color='#FFF'; el.style.fontWeight='bold'; }
+  try { await window.ComercialDataProvider.initializeCache(); }
+  catch(e) {
+    CURRENT_USER=null;
+    document.getElementById('login-overlay').style.display='';
+    document.getElementById('win').style.display='none';
+    errEl.textContent='Não foi possível abrir o armazenamento local: '+e.message;
+    return;
+  }
+  window.dispatchEvent(new Event('comercial:login'));
   // Inicializar app
   if (CURRENT_USER.role !== 'financeiro') {
     fillFils(); renderHist(); updStats();
@@ -7018,7 +7036,7 @@ function setSyncSt(state, msg) {
 function requestFastHistSync(delay) {
   if (!CURRENT_USER || CURRENT_USER.role === 'financeiro') return;
   clearTimeout(histSyncFastTimer);
-  histSyncFastTimer = setTimeout(tickSync, typeof delay === 'number' ? delay : 250);
+  if (window.histSyncController) window.histSyncController.event(false);
 }
 
 function startHistoricoRealtime() {
@@ -7041,6 +7059,7 @@ function startHistoricoRealtime() {
       })
       .subscribe(function(status) {
         window.__historicoRealtimeStatus = status;
+        if (window.histSyncController) window.histSyncController.status(status);
         if (status === 'SUBSCRIBED') {
           setSyncSt('ok', 'Sincronizado ✓');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -7084,7 +7103,9 @@ function enqueueHistOp(op) {
 async function executeHistOp(op) {
   if (!op || !window.ComercialDataProvider) return;
   if (op.type === 'upsert') {
-    await window.ComercialDataProvider.saveHistoricoRecord(syncKey(), op.record, CURRENT_USER && CURRENT_USER.name);
+    var targetStore=window.ComercialDataProvider.historyStore;
+    var saved=await window.ComercialDataProvider.saveHistoricoRecord(syncKey(), op.record, CURRENT_USER && CURRENT_USER.name);
+    await targetStore.acknowledge(saved);
     return;
   }
   if (op.type === 'delete') {
@@ -7097,35 +7118,24 @@ async function executeHistOp(op) {
 }
 
 async function flushPendingHistOps() {
-  var ops = getHistPendingOps();
-  var remaining = [];
-
-  if (!CURRENT_USER || !isFullAccessUser() || !ops.length) return true;
-  if (histSyncBusy) {
-    histSyncAgain = true;
-    return false;
-  }
-
-  histSyncBusy = true;
-  setSyncSt('busy', 'Salvando...');
+  if (!CURRENT_USER || !isFullAccessUser() || !getHistPendingOps().length) return true;
+  if (histSyncBusy) { histSyncAgain=true; return false; }
+  histSyncBusy=true;
   try {
-    for (var i = 0; i < ops.length; i++) {
-      await executeHistOp(ops[i]);
-      remaining = ops.slice(i + 1);
-      setHistPendingOps(remaining);
+    await window.ComercialDataProvider.historyStore.pendingWrites();
+    while(getHistPendingOps().length) {
+      if (!CURRENT_USER || !isFullAccessUser()) return false;
+      var op=getHistPendingOps()[0];
+      await executeHistOp(op);
+      setHistPendingOps(getHistPendingOps().filter(function(item){return item.opId!==op.opId;}));
     }
-    localHistDirty = false;
-    setSyncSt('ok', 'Sincronizado ✓');
+    localHistDirty=false;
     return true;
   } catch(e) {
-    window.__lastHistoricoSyncError = e;
-    console.warn('Falha ao enviar fila do histórico ao backend remoto.', e);
-    setHistPendingOps(remaining.length ? remaining : ops);
-    setSyncSt('ok', 'Salvo local ✓');
+    window.__lastHistoricoSyncError=e;
+    setSyncSt('ok','Salvo local ✓');
     return false;
-  } finally {
-    histSyncBusy = false;
-  }
+  } finally { histSyncBusy=false; }
 }
 
 function syncHistRecord(record) {
@@ -7277,7 +7287,7 @@ async function pushSync() {
   return flushPendingHistOps();
 }
 
-async function pullSync() {
+async function pullSync(full) {
   if (!CURRENT_USER) return;
   if (getHistPendingOps().length) {
     var flushed = await flushPendingHistOps();
@@ -7293,49 +7303,41 @@ async function pullSync() {
     setSyncSt('busy', 'Verificando...');
   }, 350);
   try {
-    var remote = await window.ComercialDataProvider.getHistorico(syncKey());
-    var remoteData = remote && Array.isArray(remote.data) ? remote.data : [];
-    var localData = getHist();
-
-    if (!histSameData(localData, remoteData)) {
-      setHistFromSync(remoteData);
-      if (remote && remote.ts) lastSyncTs = Math.max(lastSyncTs || 0, remote.ts);
-      fillFils();
-      if (document.getElementById('pane-hist').classList.contains('active')) renderHist();
-      setSyncSt('ok', 'Atualizado ✓');
-    } else if (remote && remote.ts && remote.ts > lastSyncTs) {
-      lastSyncTs = remote.ts;
-      setSyncSt('ok', 'Sincronizado ✓');
-    } else {
-      setSyncSt('ok', 'Sincronizado ✓');
-    }
+    await window.ComercialDataProvider.syncHistoricoSummaries(!!full, getHistPendingOps);
+    fillFils();
+    if(document.getElementById('pane-hist').classList.contains('active')) renderHist();
+    setSyncSt('ok','Sincronizado ✓');
   } catch(e) {
     window.__lastHistoricoSyncError = e;
     console.warn('Falha ao verificar historico no backend remoto.', e);
     setSyncSt('err', 'Offline');
+    throw e;
   } finally {
     clearTimeout(histSyncStatusTimer);
     histSyncBusy = false;
     if (histSyncAgain) {
       histSyncAgain = false;
-      setTimeout(pullSync, 500);
+      if (window.histSyncController) window.histSyncController.event(false);
     }
   }
 }
 
 function startSync() {
-  tickSync();
-  if (syncTimer) clearInterval(syncTimer);
-  // Polling fica como fallback. O caminho principal é Supabase Realtime.
-  syncTimer = setInterval(tickSync, 15000);
+  if (window.histSyncController) window.histSyncController.stop();
+  window.histSyncController=window.ComercialSync.createSyncController({
+    authorized:function(){return !!CURRENT_USER && CURRENT_USER.role!=='financeiro';},
+    run:async function(full){await tickSync(full);},
+    onError:function(e){console.warn('Sincronização:',e);setSyncSt('err','Offline');}
+  });
+  window.histSyncController.start();
 }
 
-async function tickSync() {
+async function tickSync(full) {
   if (getHistPendingOps().length) {
     var flushed = await flushPendingHistOps();
     if (!flushed) return;
   }
-  await pullSync();
+  await pullSync(full);
 }
 
 // Auto-push após salvar histórico
@@ -7359,5 +7361,6 @@ document.addEventListener('visibilitychange', function() {
 
 
 </script>
+<script src="history-ui.js?v=2.0.0.84"></script>
 </body>
 </html>
